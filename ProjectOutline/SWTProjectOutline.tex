@@ -114,17 +114,18 @@ in a given text
 ``Hasso Plattner'' is marked and sent to the server to processing. As a result
 the user is shown information gathered from the semantic web about these two
 entities. 
-
-\section{Example results}
-– What are the example results you expect?
+-- example results
 
 
 \section{Datasets}
 – What datasets are you planning to use?
+- only English texts, English labels, also better with CoreNLP
 - DBpedia \footnote{http://dbpedia.org}
 - Own dataset to simplify querying with sameAs: 
 -- e.g. dbp:homepage = dbp:website = foaf:homepage
+-- use example from paper
 
+- When using multiple datasets
 - To avoid the complexity of Web Data Integration, we treat the problem of
 data fusion as out of scope. If multiple values are retrieved for a property we
 use simples rules to choose which are shown to the user:
@@ -149,9 +150,9 @@ properties he wants to see)
 -- Sends SPARQL queries to DBpedia API/Yago API
 
 
-
+\section{Evaluation}
 – How do you plan to evaluate your results?
-
+-- gold standard
 
 
 
