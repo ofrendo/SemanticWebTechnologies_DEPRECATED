@@ -108,31 +108,48 @@
 
 \section{Goal of the application}
 – What is the goal of the application you are going to build?
-- Allow the user to automatically retrieve additional information about entities
-in a given text
-- As an example: A section of text containing the entities ``SAP\_SE'' and
-``Hasso Plattner'' is marked and sent to the server to processing. As a result
-the user is shown information gathered from the semantic web about these two
-entities. 
--- example results
-
+The goal of the application is to a user browsing websites to automatically
+retrieve additional information about entities in a given text. 
+As an example: a section of text on a news website containing the entities
+``SAP\_SE'' and ``Hasso Plattner'' is marked by the user. This is sent to
+a server to processing. As a result the user is shown information gathered from
+the semantic web about these two entities.
 
 \section{Datasets}
-– What datasets are you planning to use?
-- only English texts, English labels, also better with CoreNLP
-- DBpedia \footnote{http://dbpedia.org}
-- Own dataset to simplify querying with sameAs: 
--- e.g. dbp:homepage = dbp:website = foaf:homepage
--- use example from paper
+The underlying dataset used for retrieving information will be
+DBpedia\footnote{http://dbpedia.org}. To enable querying and subsequent display
+in the Chrome extension another dataset will be created manually.
+For example, the DBpedia page for 
+\texttt{SAP\_SE}\footnote{http://dbpedia.org/page/SAP\_SE} contains two
+properties for its website: \texttt{dbp:homepage} and \texttt{foaf:homepage}.
+A similar property found on another page is \texttt{dbp:website}. The manually
+created dataset would contain three triples:
+\begin{center}
+\begin{tabular}{lll}
+\texttt{swt:homepage} & \texttt{owl:sameAs} & \texttt{dbp:hompage} .   \\
+\texttt{swt:homepage} & \texttt{owl:sameAs} & \texttt{dbp:website} .   \\
+\texttt{swt:homepage} & \texttt{owl:sameAs} & \texttt{foaf:homepage} .
+\end{tabular}
+\end{center}
 
-- When using multiple datasets
-- To avoid the complexity of Web Data Integration, we treat the problem of
-data fusion as out of scope. If multiple values are retrieved for a property we
-use simples rules to choose which are shown to the user:
--- Numbers: Take the maximum, e.g. number of employees it is assumed that the
-company will keep on growing
--- Strings: DBpedia is treated as having a higher provenance and will be used
-as the default. If no values are found in DBpedia, Yago is used 
+To show the values in the Chrome extension any results from DBpedia and the
+manual dataset are first combined via reasoning. A new SPARQL query is then
+generated that queries for properties of our own schema, i.e.
+\texttt{swt:homepage}. The application will focus on English texts and will
+prioritize English labels because they are usually of higher quality.
+
+Optionally, additional datasets such as Yago\footnote{http://yago-knowledge.org}
+could be used to increase the amount of available information. The process to
+use this would be the same: A query is sent to a DBpedia endpoint, to a Yago
+endpoint and results are combined with the manual dataset via reasoning. 
+
+However, to avoid the complexity of Web Data Integration, we treat the problem
+of data fusion as out of scope. If multiple values from different sources are
+retrieved for a property we use simples rules to choose which values are shown
+to the user. For numbers the maximum is taken, i.e. for the number of employees
+of a company it is assumed that the company will keep on growing. For strings
+DBpedia is treated as having a higher provenance and will be used as the
+default. If no values are found in DBpedia, Yago is used. 
 
 
 
