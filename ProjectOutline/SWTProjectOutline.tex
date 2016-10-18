@@ -4,7 +4,8 @@
 \documentclass[11pt,titlepage,oneside,openany]{article}
 \usepackage{times}
 
-
+\usepackage{url}
+\usepackage[hidelinks]{hyperref}
 \usepackage{graphicx}
 \usepackage{latexsym}
 \usepackage{amsmath}
@@ -154,8 +155,19 @@ default. If no values are found in DBpedia, Yago is used.
 
 
 \section{Technical architecture}
-– What techniques are you going to use?
-- architecture picture
+In general the idea is to use a client which collects the relevant text and calls a backend to retrieve the requested information. The backend processes the text information and assembles the result containing the requested information derived from potentially multiple sources. Figure \ref{fig:architecture} provides a general overview which is described in more detail in the following. 
+
+\paragraph{Client.}
+We are going to use a chrome extension for integration into a browser, so the end user gets the information right away during browsing without a tool change. The chrome extension will connect to a JAVA server via a REST API and will send the text as well as the requested attributes. The requested attributes are a list of properties defined in our own schema. If we manage to maintain a sufficient amount of attributes a customizing in the Chrome Extension should allow to retrieve only a subset of properties per entity (Location, Organisation or Person). 
+
+\paragraph{Backend.}
+The idea is to use HEROKU\footnote{See \url{https://www.heroku.com/}} as plattform hosting the JAVA Server. One reason is that HEROKU offers support for HTTPS which is important to allow the chrome extension to work on HTTPS websites as well.
+The backend first needs to analyze the text which is done by a component performing Named Entity Recognition (NER), e.g. Stanford CoreNLP\footnote{See \url{http://nlp.stanford.edu/software/CRF-NER.shtml}} which runs in JAVA. After identifying the named entities Jena\footnote{See \url{https://jena.apache.org/}} is used to query the requested properties of organizations, locations and persons via SPARQL from a model consisting of multiple sources, so performing a model union. 
+
+\paragraph{Sources.}
+As sources we are going to use DBPedia via its SPARQL endpoint and an own definition of \textit{owl:sameAs} relations as described before. The unioned model should allow us to use one attribut
+
+
 - Chrome extension (Chrome storage API to enable user customizing which
 properties he wants to see)
 - Java server (e.g. on Heroku)
@@ -165,6 +177,13 @@ properties he wants to see)
 -- runs CoreNLP to do Named Entity Recognition
 -- Generates SPARQL queries to find information on entities and properties
 -- Sends SPARQL queries to DBpedia API/Yago API
+
+\begin{figure}[ht]
+	\centering
+	\includegraphics[width=0.8\textwidth]{architecture}
+	\caption{Draft of Architecture}
+	\label{fig:architecture}
+\end{figure}
 
 
 \section{Evaluation}
