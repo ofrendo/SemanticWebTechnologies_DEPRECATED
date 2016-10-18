@@ -76,7 +76,7 @@
    \vspace{2cm}
    {presented by\\
     Oliver Frendo (1510432) \\
-    Sascha Ulbrich () \\
+    Sascha Ulbrich (1493181) \\
    }
    \vspace{1cm} 
    {submitted to the\\
@@ -108,15 +108,13 @@
 \pagenumbering{arabic}
 
 \section{Goal of the application}
-The goal of the application is to a user browsing websites to automatically
-retrieve additional information about entities in a given text. 
+The goal of the application is to allow a user browsing websites to
+automatically retrieve additional information about entities in a given text. 
 As an example a section of text on a news website containing the entities
 ``SAP\_SE'' and ``Hasso Plattner'' is marked by the user. This is sent to
-a server to processing. As a result the user is shown information gathered from
-the semantic web about these two entities. 
-
-There will be a focus on the entity types Person, Location and Organisation
-because they are more easily retrieved as entities and because each of them has
+a server for processing. As a result the user is shown information gathered from
+the semantic web about these two entities. There will be a focus on the entity
+types Person, Location and Organisation because each of them has
 a comparatively obvious set of properties that are interesting to the user.
 
 \section{Datasets}
@@ -140,7 +138,7 @@ To show the values in the Chrome extension any results from DBpedia and the
 manual dataset are first combined via reasoning. A new SPARQL query is then
 generated that queries locally for properties of our own schema, i.e.
 \texttt{swt:homepage}. The application will focus on English texts and will
-prioritize English labels because they are usually of higher quality. 
+prioritize English labels for simplicity.
 
 Optionally, additional datasets such as
 Yago\footnote{See \url{http://yago-knowledge.org}} could be used to increase the
@@ -148,28 +146,60 @@ amount of available information. The process to use this would be the same: A qu
 endpoint and results are combined with the manual dataset via reasoning. 
 However, to avoid the complexity of Web Data Integration, we treat the problem of data fusion as out of scope. If multiple values from different sources are
 retrieved for a property we use simples rules to choose which values are shown
-to the user. For numbers the maximum is taken, i.e. for the number of employees
-of a company it is assumed that the company will keep on growing. For strings
-DBpedia is treated as having a higher provenance and will be used as the
-default. If no values are found in DBpedia, Yago is used. 
+to the user. For example, if there are multiple numbers the maximum
+is chosen, i.e. for the number of employees of a company it is assumed that the
+company will keep on growing.
+
+%For strings
+%DBpedia is treated as having a higher provenance and will be used as the
+%default. If no values are found in DBpedia, Yago is used. 
 
 
 
 \section{Technical architecture}
-In general the idea is to use a client which collects the relevant text and calls a backend to retrieve the requested information. The backend processes the text information and assembles the result containing the requested information derived from potentially multiple sources. Figure \ref{fig:architecture} provides a general overview which is described in more detail in the following. 
+In general the idea is to use a client which collects the relevant text and
+calls a backend to retrieve the requested information. The backend processes the
+text information and assembles the result containing the requested information
+derived from potentially multiple sources. Figure \ref{fig:architecture}
+provides a general overview which is described in more detail in the following
+paragraphs.
 
 \paragraph{Client.}
-We are going to use a chrome extension for integration into a browser, so the end user gets the information right away during browsing without a tool change. The chrome extension will connect to a Java server via a REST API and will send the text as well as the requested properties. Only properties defined in our own schema are allowed. If we manage to maintain a sufficient amount of attributes, a customizing in the Chrome Extension should allow to specify a subset of properties per entity type. 
+We plan to use a Chrome extension for integration with a browser, so the
+end user gets the information right away during browsing without a tool change.
+The Chrome extension will connect to a Java server via a REST API and will send
+the text as well as the requested properties. Only properties defined in our own
+schema are allowed. If we manage to maintain a sufficient amount of properties,
+an additional feature for the Chrome extension could be to allow the user to
+customize the subset of properties per entity type.
 
 \paragraph{Backend.}
-For the backend the idea is to use Heroku\footnote{See \url{https://www.heroku.com/}} as plattform hosting a Java server. One reason is that Heroku offers support for HTTPS which is important to allow the chrome extension to work on HTTPS websites as well.
-The backend first needs to analyze the text which is done by a component performing Named Entity Recognition (NER), e.g. Stanford CoreNLP\footnote{See \url{http://nlp.stanford.edu/software/CRF-NER.shtml}} which runs on Java. After identifying the named entities Jena\footnote{See \url{https://jena.apache.org/}} is used to query the requested properties of the entity types via SPARQL from a model consisting of multiple sources, so performing a model union. 
-Furthermore the backend has to offer a REST service providing the list of available properties per entity type.
+For the backend we plan to use Heroku\footnote{See
+\url{https://www.heroku.com/}} as platform for hosting a Java server. One reason
+is that Heroku offers support for HTTPS which is important to allow the chrome
+extension to work on HTTPS websites as well. 
+The backend first needs to analyze the text which is done by a component
+performing Named Entity Recognition (NER), e.g. Stanford CoreNLP\footnote{See
+\url{http://nlp.stanford.edu/software/CRF-NER.shtml}} which runs on Java. After
+identifying the named entities Jena\footnote{See \url{https://jena.apache.org/}}
+is used locally to query the requested properties of the entity types via SPARQL
+from a model consisting of multiple sources, which means a model union is
+performed.
+Furthermore the backend will offer a REST service providing the list of
+available properties per entity type.
 
 \paragraph{Sources.}
-As sources we are going to use DBPedia via its SPARQL endpoint and an own definition of \textit{owl:sameAs} relations as described before. The unioned model should allow to use one attribute of our own schema definition and retrieve all variants of its. Theoretically that should work across sources as well, so we could integrate further datasets like YAGO and add them to the model union. But per additional source we would have to extend our own schema definition as well. I
+As sources we are going to use DBPedia via its SPARQL endpoint and our own
+collection of \textit{owl:sameAs} relations as described in the previous
+section. The unioned model should allow the reasoner to use one property of
+our own schema definition and retrieve all variants of it. This should work
+across sources as well, meaning we could integrate further datasets like Yago
+and add them to the model union. However, we would have to extend our own schema
+definition per additional source. 
 
-In a first version the model union will be performed each time, as a second step we could evaluate using the TDA storage integrated in Jena to persist the retrieved and unioned data. 
+In a first version the model union will be performed per user query, as a second
+step we could consider using the TDA storage integrated in Jena to persist the
+retrieved and unioned data.
 
 \begin{figure}[ht]
 	\centering
@@ -180,14 +210,13 @@ In a first version the model union will be performed each time, as a second step
 
 
 \section{Evaluation}
-The application will be evaluated by measuring the recall on a gold standard.
-The gold standard will contain samples of entities and the properties we aim to
-retrieve. On the one hand this gives an indication of how good the application
-is at retrieving entities itself, which depends on the method and framework used, i.e.
-Named Entity Recoginition. On the other hand it also shows how good our manually
-created dataset is at combining properties by comparing which property exists
-and which property would be shown in the Chrome extension.
-
+The application will be evaluated by measuring the recall based on a gold
+standard. The gold standard will contain samples of entities and the properties
+we aim to retrieve. On the one hand this gives an indication of how good the
+application is at retrieving entities itself, which depends on the method and
+framework used, i.e. Named Entity Recoginition. On the other hand it also shows
+how good our manually created dataset is at combining properties by comparing
+which property exists and which property would be shown in the Chrome extension.
 
 
 
