@@ -136,19 +136,19 @@ created dataset would contain three triples:
 
 To show the values in the Chrome extension any results from DBpedia and the
 manual dataset are first combined via reasoning. A new SPARQL query is then
-generated that queries locally for properties of our own schema, i.e.
-\texttt{swt:homepage}. The application will focus on English texts and will
-prioritize English labels for simplicity.
+generated that queries locally for properties of our own schema. For the example
+above this would be \texttt{swt:homepage}. The application will focus on
+English texts and will prioritize English labels for simplicity.
 
 Optionally, additional datasets such as
 Yago\footnote{See \url{http://yago-knowledge.org}} could be used to increase the
 amount of available information. The process to use this would be the same: A query is sent to a DBpedia endpoint, to a Yago
 endpoint and results are combined with the manual dataset via reasoning. 
-However, to avoid the complexity of Web Data Integration, we treat the problem of data fusion as out of scope. If multiple values from different sources are
-retrieved for a property we use simples rules to choose which values are shown
-to the user. For example, if there are multiple numbers the maximum
-is chosen, i.e. for the number of employees of a company it is assumed that the
-company will keep on growing.
+However, to avoid the complexity of Web Data Integration, we treat the problem
+of data fusion as out of scope. If multiple values from different sources are
+retrieved for a property we will use simple rules to choose which values are
+shown to the user. For example, if there are multiple numbers the maximum is
+chosen, i.e. for the number of employees of a company it is assumed that the company will keep on growing.
 
 %For strings
 %DBpedia is treated as having a higher provenance and will be used as the
@@ -190,16 +190,16 @@ available properties per entity type.
 
 \paragraph{Sources.}
 As sources we are going to use DBPedia via its SPARQL endpoint and our own
-collection of \textit{owl:sameAs} relations as described in the previous
+collection of \texttt{owl:sameAs} relations as described in the previous
 section. The unioned model should allow the reasoner to use one property of
 our own schema definition and retrieve all variants of it. This should work
 across sources as well, meaning we could integrate further datasets like Yago
 and add them to the model union. However, we would have to extend our own schema
 definition per additional source. 
 
-In a first version the model union will be performed per user query, as a second
-step we could consider using the TDA storage integrated in Jena to persist the
-retrieved and unioned data.
+In a first version the model union will be performed per user query. In a second
+iteration we could consider using the TDA storage integrated in
+Jena to persist the retrieved and unioned data.
 
 \begin{figure}[ht]
 	\centering
