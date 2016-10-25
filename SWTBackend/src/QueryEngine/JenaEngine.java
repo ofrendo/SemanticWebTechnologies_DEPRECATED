@@ -7,8 +7,19 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
 
+import org.apache.jena.query.Query;
+import org.apache.jena.query.QueryExecution;
+import org.apache.jena.query.QueryExecutionFactory;
+import org.apache.jena.query.QueryFactory;
+import org.apache.jena.query.ResultSet;
+import org.apache.jena.rdf.model.*;
+import org.apache.jena.util.FileManager;
+import org.apache.jena.vocabulary.RDF;
+import org.apache.jena.vocabulary.RDFS;
+
 import NEREngine.NamedEntity;
 import NEREngine.NamedEntity.EntityType;
+
 
 /**
  * @author Sascha Ulbrich
@@ -26,17 +37,15 @@ public class JenaEngine implements QueryEngine {
 	 */
 	@Override
 	public QueryProperties getAvailableProperties() {
-		// TODO Auto-generated method stub
-		return null;
+		return qp;
 	}
 
 	/* (non-Javadoc)
 	 * @see QueryEngine.QueryEngine#getAvailableProperties(NEREngine.NamedEntity.EntityType)
 	 */
 	@Override
-	public List<String> getAvailableProperties(EntityType type) {
-		// TODO Auto-generated method stub
-		return null;
+	public List<String> getAvailableProperties(EntityType type) {		
+		return qp.get(type);
 	}
 
 	/* (non-Javadoc)
@@ -44,8 +53,7 @@ public class JenaEngine implements QueryEngine {
 	 */
 	@Override
 	public void queryEntityProperties(List<NamedEntity> entities) {
-		// TODO Auto-generated method stub
-
+		queryEntityProperties(entities, qp);
 	}
 
 	/* (non-Javadoc)
@@ -53,8 +61,11 @@ public class JenaEngine implements QueryEngine {
 	 */
 	@Override
 	public void queryEntityProperties(List<NamedEntity> entities,
-			Properties props) {
-		// TODO Auto-generated method stub
+			QueryProperties props) {
+		for (NamedEntity namedEntity : entities) {
+			//TODO define return type
+			queryEntity(namedEntity, props.get(namedEntity.getType()));
+		}
 
 	}
 
@@ -75,13 +86,22 @@ public class JenaEngine implements QueryEngine {
 	}
 	
 	private void queryEntity(NamedEntity entity, List<String> props){
-		Properties p = new Properties();
+		//Jena 
 		
 	}
 	
+	private void queryEntityInDBPedia(NamedEntity entity, List<String> props){
+		String endpoint = "http://dbpedia.org/sparql";
+		String queryString = "SELECT ?x ..."; 
+		Query q = QueryFactory.create(queryString); 
+		QueryExecution qe = QueryExecutionFactory.sparqlService(endpoint, q);
+		ResultSet RS = qe.execSelect();
+	}
+	
+	
 	private QueryProperties determineAvailableProperties(){
 		
-		//TODO
+		//TODO Jena?
 		return null;
 	};
 

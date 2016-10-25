@@ -13,5 +13,5 @@ public interface QueryEngine {
 	
 	//TODO Define return type
 	public void queryEntityProperties(List<NamedEntity> entities);
-	public void queryEntityProperties(List<NamedEntity> entities, Properties props);
+	public void queryEntityProperties(List<NamedEntity> entities, QueryProperties props);
 }
