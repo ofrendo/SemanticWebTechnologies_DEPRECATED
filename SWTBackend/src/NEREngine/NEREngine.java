@@ -4,5 +4,10 @@ import java.util.List;
 
 public interface NEREngine {
 
-public List<String> getEntitiesFromText(String text);
+public List<NamedEntity> getEntitiesFromText(String text);
 }
+
+
+
+
+

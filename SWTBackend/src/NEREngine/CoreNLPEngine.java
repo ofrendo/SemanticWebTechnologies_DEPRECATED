@@ -57,12 +57,10 @@ public class CoreNLPEngine implements NEREngine {
 	 * @see NEREngine.NEREngine#getEntitiesFromText(java.lang.String)
 	 */
 	@Override
-	public List<String> getEntitiesFromText(String text) {
+	public List<NamedEntity> getEntitiesFromText(String text) {
 		// Analyze string
 		//http://www.informit.com/articles/article.aspx?p=2265404
 		//this.pipeline.clearAnnotatorPool();
-		
-		final List<String> entities = new ArrayList<String>();
 
         //replace intra-word ".", ":", "/"
         text = this.splitOnIntrawordPunctuation(text);
@@ -77,7 +75,7 @@ public class CoreNLPEngine implements NEREngine {
         // these are all the sentences in this document
         List<CoreMap> sentences = document.get(SentencesAnnotation.class);
         StringBuilder sb = new StringBuilder();
-        List<EmbeddedToken> tokens = new ArrayList<EmbeddedToken>();
+        List<NamedEntity> tokens = new ArrayList<NamedEntity>();
         
         for (CoreMap sentence : sentences) {
             // traversing the words in the current sentence, "O" is a sensible default to initialise
@@ -115,17 +113,30 @@ public class CoreNLPEngine implements NEREngine {
               }
               prevNeToken = currNeToken;
             }
-        }
-        
-        //TODO refine return
-        for (EmbeddedToken t : tokens) {
-			entities.add(t.getValue() + ": " + t.getName());
-		}      
-        return entities;
+        }     
+        return tokens;
 	}
-	private void handleEntity(String inKey, StringBuilder inSb, List<EmbeddedToken> inTokens) {
+	private void handleEntity(String inKey, StringBuilder inSb, List<NamedEntity> inTokens) {
 	    LOG.debug("'{}' is a {}", inSb, inKey);
-	    inTokens.add(new EmbeddedToken(inKey, inSb.toString()));
+	    NamedEntity.EntityType et = null;
+	    switch (inKey) {
+		case "PERSON":
+			et = NamedEntity.EntityType.PERSON;
+			break;
+		case "ORGANIZATION":
+			et = NamedEntity.EntityType.ORGANIZATION;
+			break;
+		case "LOCATION":
+			et = NamedEntity.EntityType.LOCATION;
+			break;
+
+		default:
+			et = null;
+			break;
+		}
+	    	
+	  
+	    inTokens.add(new NamedEntity(inSb.toString(), et));
 	    inSb.setLength(0);
 	  }
         
@@ -151,37 +162,21 @@ public class CoreNLPEngine implements NEREngine {
 	        return t;
 	    }
 
-	/**
-	 * @param args
+	/*
+	 * Test execution
 	 */
 	public static void main(String[] args) {
 		NEREngine e = CoreNLPEngine.getInstance();
 		String text = "This is a test to identify SAP in Walldorf with Hasso Plattner as founder.";
-		List<String> l = e.getEntitiesFromText(text);
-		for (String s : l) {
-			System.out.println(s);
-		}				
-
-	}
 	
-	class EmbeddedToken {
-
-		  private String name;
-		  private String value;
-
-		  public String getName() {
-		    return name;
-		  }
-
-		  public String getValue() {
-		    return value;
-		  }
-
-		  public EmbeddedToken(String name, String value) {
-		    super();
-		    this.name = name;
-		    this.value = value;
-		  }
+		for (NamedEntity entity : e.getEntitiesFromText(text)) {
+	        System.out.println(entity.getType() + ": " + entity.getName());
+		}
+		
+		text = "Does Stanford's CoreNLP from Stanford University identifies multiple sentences? Simply test it: Mannheim University is located in Baden-Württemberg.";
+		for (NamedEntity entity : e.getEntitiesFromText(text)) {
+	        System.out.println(entity.getType() + ": " + entity.getName());
 		}
 
+	}
 }

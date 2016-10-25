@@ -18,5 +18,9 @@
 	<classpathentry kind="lib" path="C:/Users/sasch_000/Dropbox (Privat)/Uni/Semantic Web Technologies/ProjectRepository/SemanticWebTechnologies/SWTBackend/lib/stanford-corenlp-3.6.0-sources.jar"/>
 	<classpathentry kind="lib" path="C:/Users/sasch_000/Dropbox (Privat)/Uni/Semantic Web Technologies/ProjectRepository/SemanticWebTechnologies/SWTBackend/lib/xom.jar"/>
 	<classpathentry kind="lib" path="C:/Users/sasch_000/Dropbox (Privat)/Uni/Semantic Web Technologies/ProjectRepository/SemanticWebTechnologies/SWTBackend/lib/xom-1.2.10-src.jar"/>
+	<classpathentry kind="lib" path="C:/Users/sasch_000/Dropbox (Privat)/Uni/Semantic Web Technologies/ProjectRepository/SemanticWebTechnologies/SWTBackend/lib/jena-arq-3.1.0-sources.jar"/>
+	<classpathentry kind="lib" path="C:/Users/sasch_000/Dropbox (Privat)/Uni/Semantic Web Technologies/ProjectRepository/SemanticWebTechnologies/SWTBackend/lib/jena-cmds-3.1.0-sources.jar"/>
+	<classpathentry kind="lib" path="C:/Users/sasch_000/Dropbox (Privat)/Uni/Semantic Web Technologies/ProjectRepository/SemanticWebTechnologies/SWTBackend/lib/jena-core-3.1.0-sources.jar"/>
+	<classpathentry kind="lib" path="C:/Users/sasch_000/Dropbox (Privat)/Uni/Semantic Web Technologies/ProjectRepository/SemanticWebTechnologies/SWTBackend/lib/jena-tdb-3.1.0-sources.jar"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>
