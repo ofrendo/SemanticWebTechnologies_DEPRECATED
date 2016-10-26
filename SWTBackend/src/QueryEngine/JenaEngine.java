@@ -25,7 +25,7 @@ import NEREngine.NamedEntity;
 import NEREngine.NamedEntity.EntityType;
 
 
-/**
+/** 
  * @author Sascha Ulbrich
  *
  */
