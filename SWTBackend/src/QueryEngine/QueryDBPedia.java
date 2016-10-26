@@ -31,7 +31,7 @@ public class QueryDBPedia {
 				
 		// ---- Derive values ----
 		// rdf:label Regex
-		name = "(\\\\s+|^)" + e.getName() + "((\\\\s+.*)|$)";
+		name = "(^.{0,5}\\\\s+|^)" + e.getName() + "((\\\\s+.{0,5}$)|$)";
 
 		// rdf:type 
 		switch (e.getType()) {
@@ -71,9 +71,14 @@ public class QueryDBPedia {
 		Query q = QueryFactory.create(queryString); 
 		QueryExecution qe = QueryExecutionFactory.sparqlService(endpoint, q);
 		
-		model = qe.execDescribe();
-		
-		qe.close() ;
+		try {
+			model = qe.execDescribe();
+		} catch (Exception e2) {
+			System.out.println("Query for DBPedia failed: " + e2.getMessage());
+			System.out.println(q);
+		} finally {
+			qe.close() ;
+		}		
 		
 	}
 

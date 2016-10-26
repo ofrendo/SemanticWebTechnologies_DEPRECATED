@@ -17,6 +17,7 @@ import org.apache.jena.query.QuerySolution;
 import org.apache.jena.query.ResultSet;
 import org.apache.jena.rdf.model.*;
 
+import NEREngine.CoreNLPEngine;
 import NEREngine.NamedEntity;
 import NEREngine.NamedEntity.EntityType;
 
@@ -63,8 +64,8 @@ public class JenaEngine implements QueryEngine {
 	 * Query properties with full set of available properties
 	 */
 	@Override
-	public void queryEntityProperties(List<NamedEntity> entities) {
-		queryEntityProperties(entities, qp);
+	public List<HashMap<String,HashMap<String, Integer>>> queryEntityProperties(List<NamedEntity> entities) {
+		return queryEntityProperties(entities, qp);
 	}
 
 	/* (non-Javadoc)
@@ -72,14 +73,15 @@ public class JenaEngine implements QueryEngine {
 	 * Query properties with custom set of properties
 	 */
 	@Override
-	public void queryEntityProperties(List<NamedEntity> entities,
+	public List<HashMap<String,HashMap<String, Integer>>> queryEntityProperties(List<NamedEntity> entities,
 			QueryProperties props) {
+				
+		List<HashMap<String,HashMap<String, Integer>>> result = new ArrayList<HashMap<String,HashMap<String, Integer>>>();
 		
 		for (NamedEntity namedEntity : entities) {
-			//TODO define return type
-			System.out.println(queryEntity(namedEntity, props.get(namedEntity.getType())).toString());
+			result.add(queryEntity(namedEntity, props.get(namedEntity.getType())));
 		}
-
+		return result;
 	}	
 	
 	private HashMap<String,HashMap<String, Integer>> queryEntity(NamedEntity entity, List<String> props){
@@ -103,7 +105,7 @@ public class JenaEngine implements QueryEngine {
 		
 		if(!inCache.contains(cacheRef)){
 			//Query source
-			System.out.println("Query DBPedia");
+			System.out.println("Query DBPedia for " + entity.getType() + " " + entity.getName());
 			model.add(new QueryDBPedia(entity).getModel());
 			
 			
@@ -111,6 +113,8 @@ public class JenaEngine implements QueryEngine {
 			//System.out.println(model);
 			//Update list of cached entities 
 			inCache.add(entity.getType() + "_" + entity.getName());
+		}else{
+			System.out.println("Found in cache: " + entity.getType() + " " + entity.getName());
 		}
 		
 	}
@@ -133,7 +137,7 @@ public class JenaEngine implements QueryEngine {
 		
 		while (RS.hasNext()) {
 			QuerySolution tuple = RS.next();
-			handleQueryTuple(tuple, enhDic,result);
+			handleQueryTuple(tuple, enhDic, result);
 		}
 		System.out.println("Result rows (local): " + RS.getRowNumber());
 		qe.close();
@@ -202,7 +206,7 @@ public class JenaEngine implements QueryEngine {
 			break;
 		}
 		// rdf:label Regex
-		name = "(\\\\s+|^)" + entity.getName() + "((\\\\s+.*)|$)";
+		name = "(^.{0,5}\\\\s+|^)" + entity.getName() + "((\\\\s+.{0,5}$)|$)";
 		
 		
 		// ---- Construct Query ----------
@@ -263,10 +267,34 @@ public class JenaEngine implements QueryEngine {
 	 */
 	public static void main(String[] args) {
 		//TEST
+		String text = "This is a test to identify SAP in Walldorf with Hasso Plattner as founder.";
+		runtest(text);
+		
+		//2nd TEST (Cache)
+		text = "This is a test to identify if Walldorf is in cache but Heidelberg has to be queried";
+		runtest(text);
+	}
+
+	private static void runtest(String text) {
+		// 1) NER
+		List<NamedEntity> list = CoreNLPEngine.getInstance().getEntitiesFromText(text);
+		System.out.println("Result NER:");
+		for (NamedEntity entity : list) {
+	        System.out.println(entity.getType() + ": " + entity.getName());
+		}
+		/*
 		NamedEntity ne = new NamedEntity("SAP", EntityType.ORGANIZATION);
 		List<NamedEntity> list = new ArrayList<NamedEntity>();
-		list.add(ne);
-		JenaEngine e = new JenaEngine();
-		e.queryEntityProperties(list);
+		list.add(ne);*/
+		
+		// 2) Retrieve LOD information
+		System.out.println("Result LOD:");
+		JenaEngine je = new JenaEngine();
+		for (HashMap<String,HashMap<String, Integer>> e : je.queryEntityProperties(list)){
+			for (String key : e.keySet()) {
+				System.out.println(key + ": " + e.get(key));
+			}
+			
+		}		
 	}
 }
