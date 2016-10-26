@@ -250,7 +250,7 @@ public class JenaEngine implements QueryEngine {
 		//Test:
 		List<String> props = new ArrayList<String>() {{
 		    add("dbp:homepage");
-		    add("rdf:type");
+		    //add("rdf:type");
 		}};				
 		this.qp.put(EntityType.LOCATION, props);
 		this.qp.put(EntityType.ORGANIZATION, props);
@@ -263,7 +263,7 @@ public class JenaEngine implements QueryEngine {
 	 */
 	public static void main(String[] args) {
 		//TEST
-		NamedEntity ne = new NamedEntity("SAP SE", EntityType.ORGANIZATION);
+		NamedEntity ne = new NamedEntity("SAP", EntityType.ORGANIZATION);
 		List<NamedEntity> list = new ArrayList<NamedEntity>();
 		list.add(ne);
 		JenaEngine e = new JenaEngine();
