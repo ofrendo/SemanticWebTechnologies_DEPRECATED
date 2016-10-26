@@ -98,6 +98,7 @@ public class JenaEngine implements QueryEngine {
 	private Hashtable<String, String> executeLocalQuery(String query, Model model,Hashtable<String, String> propDic){
 		Hashtable<String, String> result = new Hashtable<String, String>();
 		Query q = QueryFactory.create(query); 
+		System.out.println(q);
 		QueryExecution qe = QueryExecutionFactory.create(q, model);
 		ResultSet RS = qe.execSelect();
 		int j = 0;
@@ -162,9 +163,9 @@ public class JenaEngine implements QueryEngine {
 				+ " PREFIX skos: <http://www.w3.org/2004/02/skos/core#>"				
 			;
 		// 2) Select Clause
-		queryString += " SELECT ";
+		queryString += " SELECT ?l ";
 		for (Entry<String,String> entry: props.entrySet()) {
-			queryString += "?" + entry.getValue();
+			queryString += " , ?" + entry.getValue();
 		}	
 		// 3) Where Clause	
 		queryString += " WHERE {"
