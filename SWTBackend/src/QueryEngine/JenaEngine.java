@@ -4,11 +4,10 @@
 package QueryEngine;
 
 import java.util.ArrayList;
-import java.util.Dictionary;
+import java.util.HashMap;
 import java.util.Hashtable;
 import java.util.List;
 import java.util.Map.Entry;
-import java.util.Properties;
 
 import org.apache.jena.query.Query;
 import org.apache.jena.query.QueryExecution;
@@ -17,9 +16,6 @@ import org.apache.jena.query.QueryFactory;
 import org.apache.jena.query.QuerySolution;
 import org.apache.jena.query.ResultSet;
 import org.apache.jena.rdf.model.*;
-import org.apache.jena.util.FileManager;
-import org.apache.jena.vocabulary.RDF;
-import org.apache.jena.vocabulary.RDFS;
 
 import NEREngine.NamedEntity;
 import NEREngine.NamedEntity.EntityType;
@@ -31,9 +27,19 @@ import NEREngine.NamedEntity.EntityType;
  */
 public class JenaEngine implements QueryEngine {
 	private QueryProperties qp;
+	private static Model model;
+	private static List<String> inCache;
 	
 	public JenaEngine() {
 		initAvailableProperties();
+		if(model == null){
+			System.out.println("Load model");
+			model = ModelFactory.createMemModelMaker().openModel("Local_Cache", false);
+			System.out.println(model.size());
+		}
+		if(inCache == null){
+			inCache = new ArrayList<String>();
+		}
 	}	
 	
 	/* (non-Javadoc)
@@ -76,47 +82,96 @@ public class JenaEngine implements QueryEngine {
 
 	}	
 	
-	private Hashtable<String, String> queryEntity(NamedEntity entity, List<String> props){
+	private HashMap<String,HashMap<String, Integer>> queryEntity(NamedEntity entity, List<String> props){
 		
 		//Query Sources to build model
-		QueryDBPedia q1 = new QueryDBPedia(entity);
+		handleSourceQueries(entity);
+		
 		
 		//construct dictionary for properties
 		Hashtable<String, String> propDic = prepareProperties(props);
 		
 		//Construct local query
-		String lq = constructLocalQuery(entity, propDic);
-		
-		//Test
-		//lq = "PREFIX rdfs:<http://www.w3.org/2000/01/rdf-schema#> SELECT DISTINCT ?l WHERE { ?x rdfs:label ?l. ?x rdfs:label ?1. }";
-		
+		String lq = constructLocalQuery(entity, propDic);		
 		
 		//Execute Query
-		return executeLocalQuery(lq,q1.getModel(),propDic);		
+		return executeLocalQuery(lq,propDic);		
 	}
 	
-	private Hashtable<String, String> executeLocalQuery(String query, Model model,Hashtable<String, String> propDic){
-		Hashtable<String, String> result = new Hashtable<String, String>();
-		Query q = QueryFactory.create(query); 
-		System.out.println(q);
-		QueryExecution qe = QueryExecutionFactory.create(q, model);
-		ResultSet RS = qe.execSelect();
-		int j = 0;
-		while (RS.hasNext()) {
-			j++;
-			QuerySolution tuple = RS.nextSolution();
-			result.put("label", tuple.getLiteral("l").getString());
-			for (Entry<String,String> entry: propDic.entrySet()) {
-				if(tuple.getLiteral(entry.getValue()) != null){
-					result.put(entry.getKey(), tuple.getLiteral(entry.getValue()).getString());
-				}
-			}
+	private void handleSourceQueries(NamedEntity entity) {
+		String cacheRef = entity.getType() + "_" + entity.getName();
+		
+		if(!inCache.contains(cacheRef)){
+			//Query source
+			System.out.println("Query DBPedia");
+			model.add(new QueryDBPedia(entity).getModel());
+			
+			
+			System.out.println("Complete model size: " + model.size());
+			//System.out.println(model);
+			//Update list of cached entities 
+			inCache.add(entity.getType() + "_" + entity.getName());
 		}
-		System.out.println(Integer.toString(j));
+		
+	}
+
+	private HashMap<String,HashMap<String, Integer>> executeLocalQuery(String query, Hashtable<String, String> propDic){
+		//Result structure (PropertyKey,(Value,Count))
+		HashMap<String,HashMap<String, Integer>> result = new HashMap<String,HashMap<String, Integer>>();
+		
+		//label is always present and has special logic -> enhance property dictionary just for reading them 
+		Hashtable<String, String> enhDic = new Hashtable<String, String> ();
+		enhDic.putAll(propDic);
+		enhDic.put("label", "l");
+		
+		Query q = QueryFactory.create(query); 
+		//System.out.println(q);
+		InfModel imodel = ModelFactory.createRDFSModel(model);
+		QueryExecution qe = QueryExecutionFactory.create(q, imodel);
+		ResultSet RS = qe.execSelect();
+		
+		
+		while (RS.hasNext()) {
+			QuerySolution tuple = RS.next();
+			handleQueryTuple(tuple, enhDic,result);
+		}
+		System.out.println("Result rows (local): " + RS.getRowNumber());
 		qe.close();
 		return result;	
 	}
 	
+	private void handleQueryTuple(QuerySolution tuple,
+			Hashtable<String, String> propDic, HashMap<String,HashMap<String, Integer>> result) {
+		String v = "";
+		String k = "";
+		HashMap<String, Integer> tempMap = new HashMap<String, Integer>();
+		
+		//handle dynamic properties
+		for (Entry<String,String> entry: propDic.entrySet()) {
+			tempMap = new HashMap<String, Integer>();
+			v = new String();
+			k = new String(); 
+			k = entry.getKey();
+			if(tuple.contains(entry.getValue())){
+				v = tuple.get(entry.getValue()).toString();
+				if(!result.containsKey(k)){
+					//key new -> add key, value with count 1
+					tempMap.put(v, 1);
+					result.put(k, tempMap);
+				}
+				else if(!result.get(k).containsKey(v)){
+					//key existing, but new value -> add new value with count 1
+					result.get(k).put(v, 1);					
+				}else{
+					//key and value existing -> increment counter					
+					result.get(k).replace(v, result.get(k).get(v)+1);
+				}
+				
+			}
+		}
+		
+	}
+
 	private Hashtable<String, String> prepareProperties(List<String> props) {
 		Hashtable<String, String> properties = new Hashtable<String, String>();
 		int i = 1;
@@ -147,7 +202,8 @@ public class JenaEngine implements QueryEngine {
 			break;
 		}
 		// rdf:label Regex
-		name = entity.getName();
+		name = "(\\\\s+|^)" + entity.getName() + "((\\\\s+.*)|$)";
+		
 		
 		// ---- Construct Query ----------
 		// 1) Prefix
@@ -157,21 +213,21 @@ public class JenaEngine implements QueryEngine {
 				+ " PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>"
 				+ " PREFIX foaf: <http://xmlns.com/foaf/0.1/>"
 				+ " PREFIX dc: <http://purl.org/dc/elements/1.1/>"
-				+ " PREFIX dbo: <http://dbpedia.org/resource/>"
-				+ " PREFIX dbpedia2: <http://dbpedia.org/property/>"
+				+ " PREFIX dbo: <http://dbpedia.org/ontology/>"
+				+ " PREFIX dbr: <http://dbpedia.org/resource/>"
+				+ " PREFIX dbp: <http://dbpedia.org/property/>"
 				+ " PREFIX dbpedia: <http://dbpedia.org/>"
 				+ " PREFIX skos: <http://www.w3.org/2004/02/skos/core#>"				
 			;
 		// 2) Select Clause
 		queryString += " SELECT ?l ";
 		for (Entry<String,String> entry: props.entrySet()) {
-			queryString += " , ?" + entry.getValue();
+			queryString += " ?" + entry.getValue();
 		}	
 		// 3) Where Clause	
 		queryString += " WHERE {"
 				+ "?e rdf:type " + type + ". "
 				+ "?e rdfs:label ?l."
-			//	+ "OPTIONAL { ?e dbp:homepage ?homepage. }"
 			;
 		// 3b) dynamic part
 		queryString += " OPTIONAL { ";
@@ -182,18 +238,19 @@ public class JenaEngine implements QueryEngine {
 		// 3c) Filter
 		queryString += " FILTER(regex(?l,'" + name + "') && LANGMATCHES(LANG(?l), 'en'))";
 		queryString += "}"; 
-		System.out.println(queryString);
+		//System.out.println(queryString);
 		
 		return queryString;
 	}
 
 	
+	@SuppressWarnings("serial")
 	private void initAvailableProperties(){
 		this.qp = new QueryProperties();
 		//Test:
 		List<String> props = new ArrayList<String>() {{
-		    add("dbpedia2:homepage");
-		    //add("rdfs:label");
+		    add("dbp:homepage");
+		    add("rdf:type");
 		}};				
 		this.qp.put(EntityType.LOCATION, props);
 		this.qp.put(EntityType.ORGANIZATION, props);
