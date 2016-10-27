@@ -3,12 +3,17 @@
  */
 package QueryEngine;
 
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Hashtable;
 import java.util.List;
 import java.util.Map.Entry;
 
+import org.apache.jena.graph.Triple;
+import org.apache.jena.ontology.OntModel;
+import org.apache.jena.ontology.OntModelSpec;
+import org.apache.jena.ontology.OntResource;
 import org.apache.jena.query.Query;
 import org.apache.jena.query.QueryExecution;
 import org.apache.jena.query.QueryExecutionFactory;
@@ -16,6 +21,11 @@ import org.apache.jena.query.QueryFactory;
 import org.apache.jena.query.QuerySolution;
 import org.apache.jena.query.ResultSet;
 import org.apache.jena.rdf.model.*;
+import org.apache.jena.rdf.model.impl.ResourceImpl;
+import org.apache.jena.rdf.model.impl.StatementImpl;
+import org.apache.jena.reasoner.Reasoner;
+import org.apache.jena.reasoner.ReasonerRegistry;
+import org.apache.jena.util.FileManager;
 
 import NEREngine.CoreNLPEngine;
 import NEREngine.NamedEntity;
@@ -128,22 +138,42 @@ public class JenaEngine implements QueryEngine {
 		enhDic.putAll(propDic);
 		enhDic.put("label", "l");
 		
+		//Construct model
+		Model cmodel = constructModel();		
+		
+		//Parse Query
 		Query q = QueryFactory.create(query); 
 		//System.out.println(q);
-		InfModel imodel = ModelFactory.createRDFSModel(model);
-		QueryExecution qe = QueryExecutionFactory.create(q, imodel);
+		
+		//Execute Query
+		QueryExecution qe = QueryExecutionFactory.create(q, cmodel);
 		ResultSet RS = qe.execSelect();
 		
-		
+		//Parse Result of Query
 		while (RS.hasNext()) {
 			QuerySolution tuple = RS.next();
 			handleQueryTuple(tuple, enhDic, result);
 		}
 		System.out.println("Result rows (local): " + RS.getRowNumber());
 		qe.close();
+		
 		return result;	
 	}
 	
+	private Model constructModel() {
+		Model ontoModel = ModelFactory.createOntologyModel(OntModelSpec.OWL_MEM);
+			
+		InputStream in = FileManager.get().open("data/UMA-SWT-HWS16.owl");
+		try {
+			ontoModel.read(in,null);
+		} catch (Exception e) {
+			System.out.println("Error during ontology import: " + e.getMessage());
+		}
+		ontoModel.add(model);
+		InfModel infModel = ModelFactory.createInfModel( ReasonerRegistry.getOWLReasoner(), ontoModel);
+		return infModel;
+	}
+
 	private void handleQueryTuple(QuerySolution tuple,
 			Hashtable<String, String> propDic, HashMap<String,HashMap<String, Integer>> result) {
 		String v = "";
@@ -196,13 +226,13 @@ public class JenaEngine implements QueryEngine {
 		// rdf:type 
 		switch (entity.getType()) {
 		case ORGANIZATION:
-			type = "dbo:Organisation";
+			type = "<http://dbpedia.org/ontology/Organisation>";
 			break;
 		case PERSON:
-			type = "dbo:Person";
+			type = "<http://dbpedia.org/ontology/Person>";
 			break;
 		case LOCATION:
-			type = "dbo:Location";
+			type = "<http://dbpedia.org/ontology/Location>";
 			break;
 		}
 		// rdf:label Regex
@@ -211,18 +241,20 @@ public class JenaEngine implements QueryEngine {
 		
 		// ---- Construct Query ----------
 		// 1) Prefix
+		
 		queryString += "PREFIX owl: <http://www.w3.org/2002/07/owl#>"
 				+ " PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>"
 				+ " PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>"
 				+ " PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>"
-				+ " PREFIX foaf: <http://xmlns.com/foaf/0.1/>"
+		/*		+ " PREFIX foaf: <http://xmlns.com/foaf/0.1/>"
 				+ " PREFIX dc: <http://purl.org/dc/elements/1.1/>"
 				+ " PREFIX dbo: <http://dbpedia.org/ontology/>"
 				+ " PREFIX dbr: <http://dbpedia.org/resource/>"
 				+ " PREFIX dbp: <http://dbpedia.org/property/>"
 				+ " PREFIX dbpedia: <http://dbpedia.org/>"
 				+ " PREFIX skos: <http://www.w3.org/2004/02/skos/core#>"				
-			;
+			*/;
+		
 		// 2) Select Clause
 		queryString += " SELECT ?l ";
 		for (Entry<String,String> entry: props.entrySet()) {
@@ -253,7 +285,7 @@ public class JenaEngine implements QueryEngine {
 		this.qp = new QueryProperties();
 		//Test:
 		List<String> props = new ArrayList<String>() {{
-		    add("dbp:homepage");
+		    add("<http://webprotege.stanford.edu/RDbCrjbll7vqdSpdmbFkl3R>");
 		    //add("rdf:type");
 		}};				
 		this.qp.put(EntityType.LOCATION, props);
@@ -266,6 +298,7 @@ public class JenaEngine implements QueryEngine {
 	 * @param args
 	 */
 	public static void main(String[] args) {
+		/*
 		//TEST
 		String text = "This is a test to identify SAP in Walldorf with Hasso Plattner as founder.";
 		runtest(text);
@@ -273,6 +306,15 @@ public class JenaEngine implements QueryEngine {
 		//2nd TEST (Cache)
 		text = "This is a test to identify if Walldorf is in cache but Heidelberg has to be queried";
 		runtest(text);
+		
+		
+		*/
+		NamedEntity ne = new NamedEntity("SAP", EntityType.ORGANIZATION);
+		List<NamedEntity> list = new ArrayList<NamedEntity>();
+		list.add(ne);
+		
+		JenaEngine je = new JenaEngine();
+		System.out.println(je.queryEntityProperties(list));
 	}
 
 	private static void runtest(String text) {
@@ -282,10 +324,7 @@ public class JenaEngine implements QueryEngine {
 		for (NamedEntity entity : list) {
 	        System.out.println(entity.getType() + ": " + entity.getName());
 		}
-		/*
-		NamedEntity ne = new NamedEntity("SAP", EntityType.ORGANIZATION);
-		List<NamedEntity> list = new ArrayList<NamedEntity>();
-		list.add(ne);*/
+		
 		
 		// 2) Retrieve LOD information
 		System.out.println("Result LOD:");
