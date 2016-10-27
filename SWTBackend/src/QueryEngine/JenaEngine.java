@@ -10,10 +10,8 @@ import java.util.Hashtable;
 import java.util.List;
 import java.util.Map.Entry;
 
-import org.apache.jena.graph.Triple;
 import org.apache.jena.ontology.OntModel;
 import org.apache.jena.ontology.OntModelSpec;
-import org.apache.jena.ontology.OntResource;
 import org.apache.jena.query.Query;
 import org.apache.jena.query.QueryExecution;
 import org.apache.jena.query.QueryExecutionFactory;
@@ -21,9 +19,6 @@ import org.apache.jena.query.QueryFactory;
 import org.apache.jena.query.QuerySolution;
 import org.apache.jena.query.ResultSet;
 import org.apache.jena.rdf.model.*;
-import org.apache.jena.rdf.model.impl.ResourceImpl;
-import org.apache.jena.rdf.model.impl.StatementImpl;
-import org.apache.jena.reasoner.Reasoner;
 import org.apache.jena.reasoner.ReasonerRegistry;
 import org.apache.jena.util.FileManager;
 
@@ -39,20 +34,32 @@ import NEREngine.NamedEntity.EntityType;
 public class JenaEngine implements QueryEngine {
 	private QueryProperties qp;
 	private static Model model;
+	private static OntModel ontoModel;
 	private static List<String> inCache;
+	private static final String PREFIX = ":";
+	
+	//######################### Public methods: Interface ##########################################
 	
 	public JenaEngine() {
 		initAvailableProperties();
-		if(model == null){
-			System.out.println("Load model");
-			model = ModelFactory.createMemModelMaker().openModel("Local_Cache", false);
-			System.out.println(model.size());
+		if(ontoModel == null){
+			ontoModel = loadLocalOntology();
 		}
 		if(inCache == null){
 			inCache = new ArrayList<String>();
+		}		
+		if(model == null){
+			model = ModelFactory.createMemModelMaker().openModel("Local_Cache", false);
+			System.out.println("Loaded model of size: " + model.size());
 		}
+		if(!model.containsAll(ontoModel)){
+			model.add(ontoModel);
+			System.out.println("Added local Ontology, complete model size: " + model.size());
+		}
+		
 	}	
 	
+
 	/* (non-Javadoc)
 	 * @see QueryEngine.QueryEngine#getAvailableProperties()
 	 */
@@ -92,14 +99,32 @@ public class JenaEngine implements QueryEngine {
 			result.add(queryEntity(namedEntity, props.get(namedEntity.getType())));
 		}
 		return result;
-	}	
+	}
 	
+	
+	
+	//######################### Private methods doing actual work ##########################################
+	
+	private OntModel loadLocalOntology() {
+		OntModel m = ModelFactory.createOntologyModel(OntModelSpec.OWL_MEM);
+		
+		//Load local Ontology from file
+		InputStream in = FileManager.get().open("data/UMA-SWT-HWS16.owl");
+		try {
+			m.read(in,null);
+		} catch (Exception e) {
+			System.out.println("Error during ontology import: " + e.getMessage());
+		}		
+		System.out.println("Loaded local Ontology of size: " + m.size());
+		return m;
+	}
+	
+	// ------- Query Entity: Top method orchastrating the query of a single entity
 	private HashMap<String,HashMap<String, Integer>> queryEntity(NamedEntity entity, List<String> props){
 		
 		//Query Sources to build model
 		handleSourceQueries(entity);
-		
-		
+				
 		//construct dictionary for properties
 		Hashtable<String, String> propDic = prepareProperties(props);
 		
@@ -110,6 +135,7 @@ public class JenaEngine implements QueryEngine {
 		return executeLocalQuery(lq,propDic);		
 	}
 	
+	// ------- Handle queries for source: if entity not in cache -> query source(s) for this entity and add to local model (cache)
 	private void handleSourceQueries(NamedEntity entity) {
 		String cacheRef = entity.getType() + "_" + entity.getName();
 		
@@ -128,7 +154,83 @@ public class JenaEngine implements QueryEngine {
 		}
 		
 	}
-
+	
+	// ------- Prepare properties -> assign indices for variable to technical property names
+	private Hashtable<String, String> prepareProperties(List<String> props) {
+		Hashtable<String, String> properties = new Hashtable<String, String>();
+		int i = 1;
+		for (String prop : props) {
+			properties.put(prop, Integer.toString(i));
+			i++;
+		}
+		return properties;
+	}
+		
+	// ------- Construct local query: incl. dynamic list of properties
+	private String constructLocalQuery(NamedEntity entity, Hashtable<String, String> props) {
+		String queryString = "";
+		String name = "";
+		
+	
+		// ---- Derive values ----
+		// rdf:type 
+		String type = PREFIX;
+		switch (entity.getType()) {
+		case ORGANIZATION:
+			type += "Organisation";
+			break;
+		case PERSON:
+			type += "Person";
+			break;
+		case LOCATION:
+			type += "Location";
+			break;
+		}
+		// rdf:label Regex
+		name = "(^.{0,5}\\\\s+|^)" + entity.getName() + "((\\\\s+.{0,5}$)|$)";
+		
+		
+		// ---- Construct Query ----------
+		// 1) Prefix (only basics and the own prefix for local queries)
+		
+		queryString += "PREFIX owl: <http://www.w3.org/2002/07/owl#>"
+				+ " PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>"
+				+ " PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>"
+				+ " PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>"
+				+ " PREFIX " + PREFIX + " <http://webprotege.stanford.edu/>"
+		/*		+ " PREFIX foaf: <http://xmlns.com/foaf/0.1/>"
+				+ " PREFIX dc: <http://purl.org/dc/elements/1.1/>"
+				+ " PREFIX dbo: <http://dbpedia.org/ontology/>"
+				+ " PREFIX dbr: <http://dbpedia.org/resource/>"
+				+ " PREFIX dbp: <http://dbpedia.org/property/>"
+				+ " PREFIX dbpedia: <http://dbpedia.org/>"
+				+ " PREFIX skos: <http://www.w3.org/2004/02/skos/core#>"				
+			*/;
+		
+		// 2) Select Clause
+		queryString += " SELECT ?e ?l";
+		for (Entry<String,String> entry: props.entrySet()) {
+			queryString += " ?" + entry.getValue();
+		}	
+		// 3) Where Clause	
+		queryString += " WHERE {"
+				+ "?e rdf:type " + type + ". "
+				+ "?e rdfs:label ?l."
+			;
+		// 3b) dynamic part
+		queryString += " OPTIONAL { ";
+		for (Entry<String,String> entry: props.entrySet()) {
+			queryString += " ?e " + PREFIX + entry.getKey() + " ?" + entry.getValue() + ".";
+		}
+		queryString += " }";
+		// 3c) Filter
+		queryString += " FILTER(regex(?l,'" + name + "') && LANGMATCHES(LANG(?l), 'en'))";
+		queryString += "}"; 
+		
+		return queryString;
+	}
+	
+	// ------- Handle local query execution
 	private HashMap<String,HashMap<String, Integer>> executeLocalQuery(String query, Hashtable<String, String> propDic){
 		//Result structure (PropertyKey,(Value,Count))
 		HashMap<String,HashMap<String, Integer>> result = new HashMap<String,HashMap<String, Integer>>();
@@ -137,11 +239,13 @@ public class JenaEngine implements QueryEngine {
 		Hashtable<String, String> enhDic = new Hashtable<String, String> ();
 		enhDic.putAll(propDic);
 		enhDic.put("label", "l");
+		enhDic.put("uri", "e");
 		
 		//Construct model
 		Model cmodel = constructModel();		
 		
 		//Parse Query
+		//System.out.println(query);
 		Query q = QueryFactory.create(query); 
 		//System.out.println(q);
 		
@@ -160,20 +264,20 @@ public class JenaEngine implements QueryEngine {
 		return result;	
 	}
 	
-	private Model constructModel() {
-		Model ontoModel = ModelFactory.createOntologyModel(OntModelSpec.OWL_MEM);
-			
-		InputStream in = FileManager.get().open("data/UMA-SWT-HWS16.owl");
-		try {
-			ontoModel.read(in,null);
-		} catch (Exception e) {
-			System.out.println("Error during ontology import: " + e.getMessage());
-		}
-		ontoModel.add(model);
-		InfModel infModel = ModelFactory.createInfModel( ReasonerRegistry.getOWLReasoner(), ontoModel);
+	
+	// ------- Construct model: load own Ontology + queried model(s) -> Inference
+	private Model constructModel() {		
+		
+		//Combine model(s)
+		//ontoModel.add(model); -> done in constructor
+		
+		//Apply Inference on combination
+		InfModel infModel = ModelFactory.createInfModel( ReasonerRegistry.getOWLReasoner(), model);
+		
 		return infModel;
 	}
-
+	
+	// ------- Parse Tuple of local query result: TODO refine output structure  
 	private void handleQueryTuple(QuerySolution tuple,
 			Hashtable<String, String> propDic, HashMap<String,HashMap<String, Integer>> result) {
 		String v = "";
@@ -206,99 +310,31 @@ public class JenaEngine implements QueryEngine {
 		
 	}
 
-	private Hashtable<String, String> prepareProperties(List<String> props) {
-		Hashtable<String, String> properties = new Hashtable<String, String>();
-		int i = 1;
-		for (String prop : props) {
-			properties.put(prop, Integer.toString(i));
-			i++;
-		}
-		return properties;
-	}
 
-	private String constructLocalQuery(NamedEntity entity, Hashtable<String, String> props) {
-		String queryString = "";
-		String type = "";
-		String name = "";
-		
-	
-		// ---- Derive values ----
-		// rdf:type 
-		switch (entity.getType()) {
-		case ORGANIZATION:
-			type = "<http://dbpedia.org/ontology/Organisation>";
-			break;
-		case PERSON:
-			type = "<http://dbpedia.org/ontology/Person>";
-			break;
-		case LOCATION:
-			type = "<http://dbpedia.org/ontology/Location>";
-			break;
-		}
-		// rdf:label Regex
-		name = "(^.{0,5}\\\\s+|^)" + entity.getName() + "((\\\\s+.{0,5}$)|$)";
-		
-		
-		// ---- Construct Query ----------
-		// 1) Prefix
-		
-		queryString += "PREFIX owl: <http://www.w3.org/2002/07/owl#>"
-				+ " PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>"
-				+ " PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>"
-				+ " PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>"
-		/*		+ " PREFIX foaf: <http://xmlns.com/foaf/0.1/>"
-				+ " PREFIX dc: <http://purl.org/dc/elements/1.1/>"
-				+ " PREFIX dbo: <http://dbpedia.org/ontology/>"
-				+ " PREFIX dbr: <http://dbpedia.org/resource/>"
-				+ " PREFIX dbp: <http://dbpedia.org/property/>"
-				+ " PREFIX dbpedia: <http://dbpedia.org/>"
-				+ " PREFIX skos: <http://www.w3.org/2004/02/skos/core#>"				
-			*/;
-		
-		// 2) Select Clause
-		queryString += " SELECT ?l ";
-		for (Entry<String,String> entry: props.entrySet()) {
-			queryString += " ?" + entry.getValue();
-		}	
-		// 3) Where Clause	
-		queryString += " WHERE {"
-				+ "?e rdf:type " + type + ". "
-				+ "?e rdfs:label ?l."
-			;
-		// 3b) dynamic part
-		queryString += " OPTIONAL { ";
-		for (Entry<String,String> entry: props.entrySet()) {
-			queryString += "?e " + entry.getKey() + " ?" + entry.getValue() + ".";
-		}
-		queryString += " }";
-		// 3c) Filter
-		queryString += " FILTER(regex(?l,'" + name + "') && LANGMATCHES(LANG(?l), 'en'))";
-		queryString += "}"; 
-		//System.out.println(queryString);
-		
-		return queryString;
-	}
-
-	
+	// ------- init available Properties: TODO: derive from Ontology instead of fixed list
 	@SuppressWarnings("serial")
 	private void initAvailableProperties(){
 		this.qp = new QueryProperties();
 		//Test:
 		List<String> props = new ArrayList<String>() {{
-		    add("<http://webprotege.stanford.edu/RDbCrjbll7vqdSpdmbFkl3R>");
-		    //add("rdf:type");
+		    add("homepage");
+		    add("foundedBy");
+		    add("depiction");
+		    add("isPrimaryTopicOf");
 		}};				
 		this.qp.put(EntityType.LOCATION, props);
 		this.qp.put(EntityType.ORGANIZATION, props);
 		this.qp.put(EntityType.PERSON, props);
-		//TODO Jena?
 	}
+	
+	
+	// #################################### TEST SECTION #################################################
 	
 	/**
 	 * @param args
 	 */
 	public static void main(String[] args) {
-		/*
+		
 		//TEST
 		String text = "This is a test to identify SAP in Walldorf with Hasso Plattner as founder.";
 		runtest(text);
@@ -308,13 +344,14 @@ public class JenaEngine implements QueryEngine {
 		runtest(text);
 		
 		
-		*/
+		/*
 		NamedEntity ne = new NamedEntity("SAP", EntityType.ORGANIZATION);
 		List<NamedEntity> list = new ArrayList<NamedEntity>();
 		list.add(ne);
 		
 		JenaEngine je = new JenaEngine();
 		System.out.println(je.queryEntityProperties(list));
+		*/
 	}
 
 	private static void runtest(String text) {
