@@ -7,10 +7,7 @@ import NEREngine.NamedEntity.EntityType;
 
 public class QueryProperties extends Properties {
 
-	/**
-	 * 
-	 */
-	private static final long serialVersionUID = 1L;
+	private static final long serialVersionUID = -3773584819674554288L;
 
 	public QueryProperties() {
 		super();	

@@ -40,8 +40,7 @@ public class JenaEngine implements QueryEngine {
 	
 	//######################### Public methods: Interface ##########################################
 	
-	public JenaEngine() {
-		initAvailableProperties();
+	public JenaEngine() {		
 		if(ontoModel == null){
 			ontoModel = loadLocalOntology();
 		}
@@ -56,7 +55,7 @@ public class JenaEngine implements QueryEngine {
 			model.add(ontoModel);
 			System.out.println("Added local Ontology, complete model size: " + model.size());
 		}
-		
+		initAvailableProperties();		
 	}	
 	
 
@@ -65,15 +64,24 @@ public class JenaEngine implements QueryEngine {
 	 */
 	@Override
 	public QueryProperties getAvailableProperties() {
-		return qp;
+		//If properties manipulated later -> by reference is bad -> deep copy needed
+		//http://stackoverflow.com/questions/31864727/how-do-i-make-a-copy-of-java-util-properties-object
+		QueryProperties ext_qp = new QueryProperties();
+		for (EntityType et : EntityType.values()) {
+			ext_qp.put(et, getAvailableProperties(et));
+		}
+		return ext_qp;
 	}
 
 	/* (non-Javadoc)
 	 * @see QueryEngine.QueryEngine#getAvailableProperties(NEREngine.NamedEntity.EntityType)
 	 */
 	@Override
-	public List<String> getAvailableProperties(EntityType type) {		
-		return qp.get(type);
+	public List<String> getAvailableProperties(EntityType type) {
+		//same issue as above -> deep copy to avoid return by reference
+		List<String> ext_list = new ArrayList<String>();
+		ext_list.addAll(qp.get(type));
+		return ext_list;
 	}
 
 	/* (non-Javadoc)
@@ -169,23 +177,12 @@ public class JenaEngine implements QueryEngine {
 	// ------- Construct local query: incl. dynamic list of properties
 	private String constructLocalQuery(NamedEntity entity, Hashtable<String, String> props) {
 		String queryString = "";
-		String name = "";
-		
+		String name = "";	
 	
 		// ---- Derive values ----
 		// rdf:type 
-		String type = PREFIX;
-		switch (entity.getType()) {
-		case ORGANIZATION:
-			type += "Organisation";
-			break;
-		case PERSON:
-			type += "Person";
-			break;
-		case LOCATION:
-			type += "Location";
-			break;
-		}
+		String type = deriveEntityClasses(entity.getType());
+		
 		// rdf:label Regex
 		name = "(^.{0,5}\\\\s+|^)" + entity.getName() + "((\\\\s+.{0,5}$)|$)";
 		
@@ -224,12 +221,32 @@ public class JenaEngine implements QueryEngine {
 		}
 		queryString += " }";
 		// 3c) Filter
-		queryString += " FILTER(regex(?l,'" + name + "') && LANGMATCHES(LANG(?l), 'en'))";
-		queryString += "}"; 
+		queryString += " FILTER(regex(?l,'" + name + "') && (LANG(?l) = '' || LANGMATCHES(LANG(?l), 'en')))";
+		
+		// 3d) String conversion
+		queryString += " BIND( str(?l) as ?label )"
+				+ "}"; 
 		
 		return queryString;
 	}
 	
+	private String deriveEntityClasses(EntityType et) {
+		String type = PREFIX;
+		switch (et) {
+		case ORGANIZATION:
+			type += "Organisation";
+			break;
+		case PERSON:
+			type += "Person";
+			break;
+		case LOCATION:
+			type += "Location";
+			break;
+		}
+		return type;
+	}
+
+
 	// ------- Handle local query execution
 	private HashMap<String,HashMap<String, Integer>> executeLocalQuery(String query, Hashtable<String, String> propDic){
 		//Result structure (PropertyKey,(Value,Count))
@@ -238,7 +255,7 @@ public class JenaEngine implements QueryEngine {
 		//label is always present and has special logic -> enhance property dictionary just for reading them 
 		Hashtable<String, String> enhDic = new Hashtable<String, String> ();
 		enhDic.putAll(propDic);
-		enhDic.put("label", "l");
+		enhDic.put("label", "label");
 		enhDic.put("uri", "e");
 		
 		//Construct model
@@ -311,10 +328,11 @@ public class JenaEngine implements QueryEngine {
 	}
 
 
-	// ------- init available Properties: TODO: derive from Ontology instead of fixed list
-	@SuppressWarnings("serial")
+	// ------- init available Properties via local Ontology
 	private void initAvailableProperties(){
 		this.qp = new QueryProperties();
+		
+		/*
 		//Test:
 		List<String> props = new ArrayList<String>() {{
 		    add("homepage");
@@ -325,6 +343,40 @@ public class JenaEngine implements QueryEngine {
 		this.qp.put(EntityType.LOCATION, props);
 		this.qp.put(EntityType.ORGANIZATION, props);
 		this.qp.put(EntityType.PERSON, props);
+		*/
+		
+		Model m = constructModel();
+		List<String> props;
+		for (EntityType et : EntityType.values()) {
+			props = new ArrayList<String>();
+			
+			String type = deriveEntityClasses(et);
+			
+			//Query available properties from local Ontology
+			String queryString = " PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>"
+					+ " PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>"
+					+ " PREFIX " + PREFIX + " <http://webprotege.stanford.edu/>"
+					+ " SELECT ?p ?label"
+					+ " WHERE {"
+					+ " ?p rdfs:domain "+ type +"."
+					+ " ?p rdf:type rdf:Property."
+					+ " ?p rdfs:label ?l."
+					+ " FILTER(LANG(?l) = '' || LANGMATCHES(LANG(?l), 'en'))"
+					+ " bind( str(?l) as ?label )"
+							+ "}"
+					; 
+			Query query = QueryFactory.create(queryString); 
+			//System.out.println(query);
+			QueryExecution qe = QueryExecutionFactory.create(query, m); 
+			ResultSet results = qe.execSelect(); 
+			while(results.hasNext()) {  
+				QuerySolution sol = results.next();  
+				String s = sol.get("label").toString();
+				props.add(s);
+			}			
+			qe.close();
+			this.qp.put(et, props);
+		}
 	}
 	
 	
@@ -334,27 +386,44 @@ public class JenaEngine implements QueryEngine {
 	 * @param args
 	 */
 	public static void main(String[] args) {
+		//  ---- End-to-End Test
+		JenaEngine je = new JenaEngine();
 		
-		//TEST
+		// 1st simple test with all entity types
 		String text = "This is a test to identify SAP in Walldorf with Hasso Plattner as founder.";
-		runtest(text);
+		runtest(text,je.getAvailableProperties());
 		
-		//2nd TEST (Cache)
+		// 2nd TEST (Cache and remove property)
 		text = "This is a test to identify if Walldorf is in cache but Heidelberg has to be queried";
-		runtest(text);
 		
+		QueryProperties qp = je.getAvailableProperties();				
+		qp.get(EntityType.LOCATION).remove("depiction");
+		
+		runtest(text,qp);
 		
 		/*
+		// ----- Simple test without NER
 		NamedEntity ne = new NamedEntity("SAP", EntityType.ORGANIZATION);
 		List<NamedEntity> list = new ArrayList<NamedEntity>();
 		list.add(ne);
 		
 		JenaEngine je = new JenaEngine();
-		System.out.println(je.queryEntityProperties(list));
+		QueryProperties qp = je.getAvailableProperties();				
+		qp.get(EntityType.LOCATION).remove("depiction");
+		
+		System.out.println(je.getAvailableProperties());
+		System.out.println(qp);
+		System.out.println(je.queryEntityProperties(list,qp));
+		*/		
+		
+		/*
+		// ----- Test property derivation
+		JenaEngine je = new JenaEngine();
+		System.out.println(je.getAvailableProperties(EntityType.LOCATION));
 		*/
 	}
 
-	private static void runtest(String text) {
+	private static void runtest(String text, QueryProperties qp) {
 		// 1) NER
 		List<NamedEntity> list = CoreNLPEngine.getInstance().getEntitiesFromText(text);
 		System.out.println("Result NER:");
@@ -366,7 +435,7 @@ public class JenaEngine implements QueryEngine {
 		// 2) Retrieve LOD information
 		System.out.println("Result LOD:");
 		JenaEngine je = new JenaEngine();
-		for (HashMap<String,HashMap<String, Integer>> e : je.queryEntityProperties(list)){
+		for (HashMap<String,HashMap<String, Integer>> e : je.queryEntityProperties(list, qp)){
 			for (String key : e.keySet()) {
 				System.out.println(key + ": " + e.get(key));
 			}
