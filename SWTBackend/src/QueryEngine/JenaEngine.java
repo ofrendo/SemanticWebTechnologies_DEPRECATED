@@ -286,9 +286,7 @@ public class JenaEngine implements QueryEngine {
 	}
 	
 	private String addRegex(String in){
-		String out = new String(in);
-		out.replace(".", ".*");
-		return ("(^.{0,5}\\\\s+|^)" + out + "((\\\\s+.{0,5}$)|$)");
+		return ("(^.{0,5}\\\\s+|^)" + in.replace(".", ".*") + "((\\\\s+.{0,5}$)|$)");
 	}
 	
 	private String deriveEntityClasses(EntityType et) {
@@ -543,7 +541,7 @@ public class JenaEngine implements QueryEngine {
 		
 		// 1st simple test with all entity types
 		String text = "This is a test to identify SAP in Walldorf with H. Plattner as founder.";
-		runtest(text,je.getAvailableProperties());
+			runtest(text,je.getAvailableProperties());
 		
 		// 2nd TEST (just hit the cache)
 		text = "Just testing how caching works for H. Plattner from Walldorf.";
@@ -555,12 +553,20 @@ public class JenaEngine implements QueryEngine {
 		qp.get(EntityType.LOCATION).remove("depiction");
 		runtest(text,qp);
 		
+		/*
 		// 4th TEST: Heikos example
 		//some trouble with special characters
-		/*text = "Zu den verdaechtigen gehört Walter K., ein ehemaliger Fußballprofi aus Stuttgart. "
+		text = "Zu den verdaechtigen gehört Walter K., ein ehemaliger Fußballprofi aus Stuttgart. "
 				+ "K. spielte zweitweise sogar in der deutschen Nationalmannschaft, nach seiner Karrier "
 				+ "betrieb er für die Allianz ein Versicherungsbüro.";
-		runtest(text,je.getAvailableProperties());*/
+		runtest(text,je.getAvailableProperties());
+		
+		// 4th TEST: Heikos example in english
+		//some trouble with special characters rertieved through stuttgart
+		text = "The suspect Walter K. is a former soccer player from Stuttgart. "
+				+ "After his carrer he had a insurance office for Allianz.";
+		runtest(text,je.getAvailableProperties());
+		/*
 
 		/*
 		// ----- Simple test without NER
