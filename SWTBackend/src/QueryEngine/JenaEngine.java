@@ -193,15 +193,22 @@ public class JenaEngine implements QueryEngine {
 		List<HashMap<String,HashMap<String, Integer>>> result = new ArrayList<HashMap<String,HashMap<String, Integer>>>();
 		
 		//Construct context model 
-		Model cmodel = constructModel(entities);
+		Model cmodel = constructModel();
 		
+		//Try to identify correct entities in context!
+		//-> count (indirect) relations between entities and choose most relevant entities
+		HashMap<String,String>  relevantURIs = deriveRelevantURIs(entities, cmodel);
+		System.out.println("Relevant URIs in Context: " + relevantURIs);	
+		
+		
+				
 		//query each entity separately on local model				
 		for (NamedEntity e : entities) {
 			//construct dictionary for entity type specific properties 
 			Hashtable<String, String> propDic = prepareProperties(props.get(e.getType()));
 			
 			//Construct local query
-			String lq = constructLocalQuery(e, propDic);		
+			String lq = constructLocalQuery(propDic, relevantURIs.get(e.getName()));		
 		
 			//Execute Query
 			result.add(executeLocalQuery(lq,propDic,cmodel));	
@@ -222,17 +229,9 @@ public class JenaEngine implements QueryEngine {
 	}
 		
 	// ------- Construct local query: incl. dynamic list of properties
-	private String constructLocalQuery(NamedEntity entity, Hashtable<String, String> props) {
+	private String constructLocalQuery(Hashtable<String, String> props, String uri) {
 		String queryString = "";
-		String name = "";	
-	
-		// ---- Derive values ----
-		// rdf:type 
-		String type = deriveEntityClasses(entity.getType());
-		
-		// rdf:label Regex
-		name = "(^.{0,5}\\\\s+|^)" + entity.getName() + "((\\\\s+.{0,5}$)|$)";
-		
+		String res = "<" + uri + ">";
 		
 		// ---- Construct Query ----------
 		// 1) Prefix (only basics and the own prefix for local queries)
@@ -242,40 +241,38 @@ public class JenaEngine implements QueryEngine {
 				+ " PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>"
 				+ " PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>"
 				+ " PREFIX " + PREFIX + " <http://webprotege.stanford.edu/>"
-		/*		+ " PREFIX foaf: <http://xmlns.com/foaf/0.1/>"
-				+ " PREFIX dc: <http://purl.org/dc/elements/1.1/>"
-				+ " PREFIX dbo: <http://dbpedia.org/ontology/>"
-				+ " PREFIX dbr: <http://dbpedia.org/resource/>"
-				+ " PREFIX dbp: <http://dbpedia.org/property/>"
-				+ " PREFIX dbpedia: <http://dbpedia.org/>"
-				+ " PREFIX skos: <http://www.w3.org/2004/02/skos/core#>"				
-			*/;
+				;
 		
 		// 2) Select Clause
-		queryString += " SELECT ?e ?l";
+		queryString += " SELECT ?l";
 		for (Entry<String,String> entry: props.entrySet()) {
 			queryString += " ?" + entry.getValue();
 		}	
 		// 3) Where Clause	
 		// 3a) static part
 		queryString += " WHERE {"
-				+ "?e rdf:type " + type + ". "
-				+ "?e rdfs:label ?l."
+				+ res + " rdfs:label ?l."
 			;
 		// 3b) dynamic part
 		queryString += " OPTIONAL { ";
 		for (Entry<String,String> entry: props.entrySet()) {
-			queryString += " ?e " + PREFIX + entry.getKey() + " ?" + entry.getValue() + ".";
+			queryString += " " + res + " " + PREFIX + entry.getKey() + " ?" + entry.getValue() + ".";
 		}
 		queryString += " }";
 		// 3c) Filter
-		queryString += " FILTER(regex(?l,'" + name + "') && (LANG(?l) = '' || LANGMATCHES(LANG(?l), 'en')))";
+		queryString += " FILTER(LANG(?l) = '' || LANGMATCHES(LANG(?l), 'en'))";
 		
 		// 3d) String conversion
 		queryString += " BIND( str(?l) as ?label )"
 				+ "}"; 
 		
 		return queryString;
+	}
+	
+	private String addRegex(String in){
+		String out = new String(in);
+		out.replace(".", ".*");
+		return ("(^.{0,5}\\\\s+|^)" + out + "((\\\\s+.{0,5}$)|$)");
 	}
 	
 	private String deriveEntityClasses(EntityType et) {
@@ -304,8 +301,6 @@ public class JenaEngine implements QueryEngine {
 		Hashtable<String, String> enhDic = new Hashtable<String, String> ();
 		enhDic.putAll(propDic);
 		enhDic.put("label", "label");
-		enhDic.put("uri", "e");
-		
 		
 		//Parse Query
 		//System.out.println(query);
@@ -331,30 +326,109 @@ public class JenaEngine implements QueryEngine {
 	
 	
 	// ------- Construct model: load own Ontology + queried model(s) and do some Inference
-	private Model constructModel(List<NamedEntity> entities) {	
+	private Model constructModel() {	
 		//get the basic model, enhance with ontology, do inference
-		//Reasoner takes to much time! -> OWLMicro is to small, according to https://jena.apache.org/documentation/inference
-		//TODO: find alternative Reasoner which can deal with equality axioms
-		//Test: does the reasoning is applied automatically if model is enhanced? 
+		//Reasoner takes to much time, but OWLMicro seems to work but could be to simple ... https://jena.apache.org/documentation/inference
+		//TODO: find alternative Reasoner which can deal with owl equality axioms
 		Long start = System.nanoTime();
 		if(modelChanged){
 			//it is much more efficient to reason on basic statement than do reasoning on a previously inferred model
-			infModel = ModelFactory.createInfModel( ReasonerRegistry.getOWLReasoner(), ModelFactory.createUnion(model, ontoModel));
+			infModel = ModelFactory.createInfModel( ReasonerRegistry.getOWLMicroReasoner(), ModelFactory.createUnion(model, ontoModel));
 			modelChanged = false;
 		}		
 
 		System.out.println("Infered Model size: " + model.size() + "; Time: " + TimeUnit.NANOSECONDS.toMillis(System.nanoTime()-start) + "ms");
-		
-		//TODO: try to identify correct entities in context!
-		// get relevant subspace of potential entities
-		
-		// count (indirect) relations between entities
-		
-		// choose most relevant entities 
-		
+				
+		//TODO: Derive relevant subspace model based on identified URIs? -> Describe of URIs? 
+
 		return infModel;
 	}
 	
+	private HashMap<String,String> deriveRelevantURIs(List<NamedEntity> entities,
+			Model m) {
+		HashMap<String,String> nameToResource = new HashMap<String, String>();
+		
+		for (NamedEntity e : entities) {	
+			
+			// ---- Derive values ----
+			// rdf:type 
+			String type = deriveEntityClasses(e.getType());
+			
+			// rdf:label Regex
+			String name = addRegex(e.getName());
+			
+			//construct filter part (same for every part of the union)
+			String filter = " LANGMATCHES(LANG(?l1), 'en')"
+					+ " && LANGMATCHES(LANG(?l2), 'en')"
+					+ " && regex(?l1,'" + name + "')"
+					;
+			
+			//Add context info to filter, if context available
+			if(entities.size() > 1){
+				//derive the other entities in the context 
+				String others = "";
+				for (NamedEntity e2 : entities) {
+					if(e2.getName() != e.getName()){
+						if(others != ""){
+							others += " || ";
+						}
+						others += "regex(?l2,'" + name + "')";
+					}
+				}
+				//add to filter
+				filter += " && ( " + others + " ) ";
+			}
+					
+			
+			// Union part 1: direct relations
+			String part1 = "SELECT ?e1 ?p1  WHERE {"
+					+ " ?e1 ?p1 ?e2."
+					+ " ?e1 rdfs:label ?l1."
+					+ " ?e2 rdfs:label ?l2."
+					+ " ?e1 rdf:type " + type + "."
+					+ " FILTER ( " + filter + " ) }";
+			
+			// Union part 2: indirect relations
+			String part2 = "SELECT ?e1 ?p1  WHERE {"
+					+ " ?e1 ?p1 ?o."
+					+ " ?e2 ?p2 ?o."
+					+ " ?e1 rdfs:label ?l1."
+					+ " ?e2 rdfs:label ?l2."
+					+ " ?e1 rdf:type " + type + "."
+					+ " FILTER (" + filter + ")}";
+			
+			// Complete Query
+			String queryString = "PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>"
+					+ " PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>"
+					+ " PREFIX " + PREFIX + " <http://webprotege.stanford.edu/>"
+					+ " SELECT ?e1 (count(?p1) as ?pCount) { { "
+					+ part1
+					+ " } UNION { " 
+					+ part2
+					+ " } } GROUP BY ?e1"
+					; 
+			//System.out.println(queryString);
+			Query query = QueryFactory.create(queryString); 
+			//System.out.println(query);
+			QueryExecution qe = QueryExecutionFactory.create(query, m); 
+			ResultSet results = qe.execSelect(); 
+			int max = 0;
+			String value = "";
+			while(results.hasNext()) {  
+				QuerySolution sol = results.next(); 
+				//System.out.println(sol);
+				if( sol.contains("pCount") && sol.get("pCount").asLiteral().getInt() > max){
+					max = sol.get("pCount").asLiteral().getInt();
+					value = sol.get("e1").toString();
+				}
+			}
+			nameToResource.put(e.getName(), value);
+			qe.close();
+		}
+		return nameToResource;
+	}
+
+
 	// ------- Parse Tuple of local query result: TODO refine output structure  
 	private void handleQueryTuple(QuerySolution tuple,
 			Hashtable<String, String> propDic, HashMap<String,HashMap<String, Integer>> result) {
@@ -406,7 +480,7 @@ public class JenaEngine implements QueryEngine {
 		this.qp.put(EntityType.PERSON, props);
 		*/
 		
-		Model m = ontoModel;
+		Model m = ModelFactory.createRDFSModel(ontoModel);
 		List<String> props;
 		for (EntityType et : EntityType.values()) {
 			props = new ArrayList<String>();
@@ -447,6 +521,7 @@ public class JenaEngine implements QueryEngine {
 	 * @param args
 	 */
 	public static void main(String[] args) {
+		
 		//  ---- End-to-End Test
 		JenaEngine je = new JenaEngine();
 		
@@ -465,12 +540,13 @@ public class JenaEngine implements QueryEngine {
 		qp.get(EntityType.LOCATION).remove("depiction");
 		
 		runtest(text,qp);
-		
+
 		/*
 		// ----- Simple test without NER
-		NamedEntity ne = new NamedEntity("SAP", EntityType.ORGANIZATION);
 		List<NamedEntity> list = new ArrayList<NamedEntity>();
-		list.add(ne);
+		list.add(new NamedEntity("SAP", EntityType.ORGANIZATION));
+		list.add(new NamedEntity("Walldorf", EntityType.LOCATION));
+		
 		
 		JenaEngine je = new JenaEngine();
 		QueryProperties qp = je.getAvailableProperties();				
