@@ -152,7 +152,8 @@ public class JenaEngine implements QueryEngine {
 			}else{
 				System.out.println("Found in cache: " + entity.getType() + " " + entity.getName());
 			}			
-		}
+		}		
+		
 		
 		//Query sources in parallel per entity type if requested
 		//(without filter on entity type queries get to large -> aborted)
@@ -161,8 +162,10 @@ public class JenaEngine implements QueryEngine {
 		ThreadGroup group = new ThreadGroup( entities.toString() );
 		for (EntityType et : queryEntities.keySet()) {
 			if(!queryEntities.get(et).isEmpty()){
+				String filter = genFilter(queryEntities.get(et));
+				
 				//DBPedia
-				new BackgroundSourceQueryHandler(group, Source.DBPedia, et, queryEntities.get(et), inQuery.get(et)).start();
+				new BackgroundSourceQueryHandler(group, Source.DBPedia, et, queryEntities.get(et), inQuery.get(et), filter).start();
 			}
 		}
 		
@@ -188,6 +191,19 @@ public class JenaEngine implements QueryEngine {
 		}
 		System.out.println("Load of Sources finished. Model size: " + model.size()+ "; Time: " + TimeUnit.NANOSECONDS.toMillis(System.nanoTime()-start) + "ms");
 	}
+
+	private String genFilter(List<String> ets) {
+		//Generate generic filter string
+		String filter = "";
+		for (String name : ets) {
+			if(filter != ""){
+				filter = " || ";
+			}
+			filter += "regex(?l,'" + addRegex(name) + "')";
+		}				
+		return filter;
+	}
+
 
 	private List<HashMap<String, HashMap<String, Integer>>> handleLocalQueries(List<NamedEntity> entities, QueryProperties props) {
 		List<HashMap<String,HashMap<String, Integer>>> result = new ArrayList<HashMap<String,HashMap<String, Integer>>>();

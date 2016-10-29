@@ -9,40 +9,24 @@ import org.apache.jena.query.QueryFactory;
 import org.apache.jena.query.QueryParseException;
 import org.apache.jena.rdf.model.Model;
 
-import NEREngine.NamedEntity;
 import NEREngine.NamedEntity.EntityType;
 
 public class QueryDBPedia {
 	private Model model;
-	private static final String REGEX_PREFIX = "(^.{0,5}\\\\s+|^)" ;
-	private static final String REGEX_SUFIX = "((\\\\s+.{0,5}$)|$)";
 
 	public Model getModel(){
 		return model;
 	}
-	
-	public QueryDBPedia(NamedEntity e) {
-		querySource(e);
-		//System.out.println(model.size());
-		//System.out.println(model.getNsPrefixMap());	
-	}
-	
-	
 
-	public QueryDBPedia(EntityType et, List<String> entities) {
-		querySource(et, entities);
+	public QueryDBPedia(EntityType et, List<String> entities, String filter) {
+		querySource(et, entities, filter);
 	}
 	
-	private void querySource(EntityType et, List<String> entities) {
+	private void querySource(EntityType et,List<String> entities, String filter) {
 		// ---- Definitions ---
 		String endpoint = "http://dbpedia.org/sparql";
 		String queryString = "";
 		String type = "";
-		//String name = "";
-				
-		// ---- Derive values ----
-		// rdf:label Regex
-		//name = "(^.{0,5}\\\\s+|^)" + e.getName() + "((\\\\s+.{0,5}$)|$)";
 
 		// rdf:type 
 		switch (et) {
@@ -63,20 +47,8 @@ public class QueryDBPedia {
 		queryString += " WHERE { "
 				+ "?e <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> " + type + ". "
 				+ "?e <http://www.w3.org/2000/01/rdf-schema#label> ?l.";
-		// 3c) Filter
-		queryString += " FILTER((";
-		String filter = "";
-		for (String name : entities) {
-			if(filter == ""){
-				filter = "regex(?l,'" + REGEX_PREFIX + name + REGEX_SUFIX + "')";
-			}else{
-				filter += " || regex(?l,'" + REGEX_PREFIX + name + REGEX_SUFIX + "')";
-			}
-		}				
-		queryString += filter 
-				+ ") && LANGMATCHES(LANG(?l), 'en'))"
-				+ " }"
-			; 
+		// 3c) Filter		
+		queryString += " FILTER( LANGMATCHES(LANG(?l), 'en') && ( " + filter + " ) ) }"; 
 	
 		//System.out.println(queryString);
 		
@@ -100,60 +72,6 @@ public class QueryDBPedia {
 			System.out.println(q);
 		} finally {
 			qe.close() ;
-		}		
-		
+		}			
 	}
-
-	private void querySource(NamedEntity e) {
-		// ---- Definitions ---
-		String endpoint = "http://dbpedia.org/sparql";
-		String queryString = "";
-		String type = "";
-		String name = "";
-				
-		// ---- Derive values ----
-		// rdf:label Regex
-		name = REGEX_PREFIX + e.getName() + REGEX_SUFIX;
-
-		// rdf:type 
-		switch (e.getType()) {
-		case ORGANIZATION:
-			type = "<http://dbpedia.org/ontology/Organisation>";
-			break;
-		case PERSON:
-			type = "<http://dbpedia.org/ontology/Person>";
-			break;
-		case LOCATION:
-			type = "<http://dbpedia.org/ontology/Location>";
-			break;
-		}		
-
-		// 2) DESCRIBE Clause
-		queryString += "DESCRIBE ?e";
-		// 3) Where Clause	
-		queryString += " WHERE { "
-				+ "?e <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> " + type + ". "
-				+ "?e <http://www.w3.org/2000/01/rdf-schema#label> ?l.";
-		// 3c) Filter
-		queryString += " FILTER(regex(?l,'" + name + "') && LANGMATCHES(LANG(?l), 'en'))"
-				+ " }"
-			; 
-	
-		//System.out.println(queryString);
-		
-		// ---- Execute Query --------
-		Query q = QueryFactory.create(queryString); 
-		QueryExecution qe = QueryExecutionFactory.sparqlService(endpoint, q);
-		
-		try {
-			model = qe.execDescribe();
-		} catch (Exception e2) {
-			System.out.println("Query for DBPedia failed: " + e2.getMessage());
-			System.out.println(q);
-		} finally {
-			qe.close() ;
-		}		
-		
-	}
-
 }
