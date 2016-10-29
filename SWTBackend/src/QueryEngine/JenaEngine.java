@@ -9,6 +9,7 @@ import java.util.HashMap;
 import java.util.Hashtable;
 import java.util.List;
 import java.util.Map.Entry;
+import java.util.concurrent.TimeUnit;
 
 import org.apache.jena.ontology.OntModel;
 import org.apache.jena.ontology.OntModelSpec;
@@ -25,6 +26,7 @@ import org.apache.jena.util.FileManager;
 import NEREngine.CoreNLPEngine;
 import NEREngine.NamedEntity;
 import NEREngine.NamedEntity.EntityType;
+import QueryEngine.BackgroundSourceQueryHandler.Source;
 
 
 /** 
@@ -34,9 +36,11 @@ import NEREngine.NamedEntity.EntityType;
 public class JenaEngine implements QueryEngine {
 	private QueryProperties qp;
 	private static Model model;
+	private static InfModel infModel;
 	private static OntModel ontoModel;
 	private static List<String> inCache;
 	private static final String PREFIX = ":";
+	private static Boolean modelChanged = false;
 	
 	//######################### Public methods: Interface ##########################################
 	
@@ -48,13 +52,15 @@ public class JenaEngine implements QueryEngine {
 			inCache = new ArrayList<String>();
 		}		
 		if(model == null){
-			model = ModelFactory.createMemModelMaker().openModel("Local_Cache", false);
+			//That Memory Model doesn't work as expected -> only in memory during JVM lifetime -> restart: no model anymore
+			model = ModelFactory.createMemModelMaker().openModel("LocalCache", false);
 			System.out.println("Loaded model of size: " + model.size());
+			modelChanged = true;
 		}
-		if(!model.containsAll(ontoModel)){
-			model.add(ontoModel);
-			System.out.println("Added local Ontology, complete model size: " + model.size());
-		}
+//		if(!model.containsAll(ontoModel)){
+//			model.add(ontoModel);
+//			System.out.println("Added local Ontology, complete model size: " + model.size());
+//		}
 		initAvailableProperties();		
 	}	
 	
@@ -99,20 +105,19 @@ public class JenaEngine implements QueryEngine {
 	 */
 	@Override
 	public List<HashMap<String,HashMap<String, Integer>>> queryEntityProperties(List<NamedEntity> entities,
-			QueryProperties props) {
-				
-		List<HashMap<String,HashMap<String, Integer>>> result = new ArrayList<HashMap<String,HashMap<String, Integer>>>();
+			QueryProperties props) {		
 		
-		for (NamedEntity namedEntity : entities) {
-			result.add(queryEntity(namedEntity, props.get(namedEntity.getType())));
-		}
-		return result;
+		//Query Sources to build model
+		handleParallelSourceQueries(entities);
+		
+		//Query local model		
+		return handleLocalQueries(entities, props);
 	}
 	
 	
 	
 	//######################### Private methods doing actual work ##########################################
-	
+
 	private OntModel loadLocalOntology() {
 		OntModel m = ModelFactory.createOntologyModel(OntModelSpec.OWL_MEM);
 		
@@ -126,40 +131,82 @@ public class JenaEngine implements QueryEngine {
 		System.out.println("Loaded local Ontology of size: " + m.size());
 		return m;
 	}
-	
-	// ------- Query Entity: Top method orchastrating the query of a single entity
-	private HashMap<String,HashMap<String, Integer>> queryEntity(NamedEntity entity, List<String> props){
-		
-		//Query Sources to build model
-		handleSourceQueries(entity);
-				
-		//construct dictionary for properties
-		Hashtable<String, String> propDic = prepareProperties(props);
-		
-		//Construct local query
-		String lq = constructLocalQuery(entity, propDic);		
-		
-		//Execute Query
-		return executeLocalQuery(lq,propDic);		
-	}
-	
-	// ------- Handle queries for source: if entity not in cache -> query source(s) for this entity and add to local model (cache)
-	private void handleSourceQueries(NamedEntity entity) {
-		String cacheRef = entity.getType() + "_" + entity.getName();
-		
-		if(!inCache.contains(cacheRef)){
-			//Query source
-			System.out.println("Query DBPedia for " + entity.getType() + " " + entity.getName());
-			model.add(new QueryDBPedia(entity).getModel());
-			
-			
-			System.out.println("Complete model size: " + model.size());
-			//System.out.println(model);
-			//Update list of cached entities 
-			inCache.add(entity.getType() + "_" + entity.getName());
-		}else{
-			System.out.println("Found in cache: " + entity.getType() + " " + entity.getName());
+
+	private void handleParallelSourceQueries(List<NamedEntity> entities) {
+		//Initialize HashMaps
+		HashMap<EntityType, List<String>> queryEntities = new HashMap<EntityType, List<String>> ();
+		HashMap<EntityType, List<String>> inQuery = new HashMap<EntityType, List<String>> ();
+		for (EntityType et : EntityType.values()) {
+			queryEntities.put(et,new ArrayList<String>());
+			inQuery.put(et,new ArrayList<String>());
 		}
+		
+		//Determine which entities to query per entity type				
+		for (NamedEntity entity : entities) {
+			String cacheRef = entity.getType() + "_" + entity.getName();
+			if(!inCache.contains(cacheRef) && !inQuery.get(entity.getType()).contains(cacheRef)){
+				//Has to be add to query
+				queryEntities.get(entity.getType()).add(entity.getName());
+				//Keep track which entities are tracked
+				inQuery.get(entity.getType()).add(cacheRef);
+			}else{
+				System.out.println("Found in cache: " + entity.getType() + " " + entity.getName());
+			}			
+		}
+		
+		//Query sources in parallel per entity type if requested
+		//(without filter on entity type queries get to large -> aborted)
+		System.out.println("Start load from sources...");
+		Long start = System.nanoTime();
+		ThreadGroup group = new ThreadGroup( entities.toString() );
+		for (EntityType et : queryEntities.keySet()) {
+			if(!queryEntities.get(et).isEmpty()){
+				//DBPedia
+				new BackgroundSourceQueryHandler(group, Source.DBPedia, et, queryEntities.get(et), inQuery.get(et)).start();
+			}
+		}
+		
+		//Wait till all are finished and derive model
+		Model resModel;
+		try {
+			BackgroundSourceQueryHandler[] threads = new BackgroundSourceQueryHandler[group.activeCount()];
+			group.enumerate(threads);
+			for (int i = 0; i < threads.length; i++) {
+				threads[i].join();
+				resModel = threads[i].getResultModel(); 
+				if(resModel != null && resModel.size() > 0){
+					model.add(resModel);
+					modelChanged = true;
+					//Update Cache: TODO: implement Source specific cache
+					for(String ref : threads[i].getCacheRef()){
+						inCache.add(ref);
+					}
+				}
+			}
+		} catch (InterruptedException e) {
+			System.out.println(e.getMessage());
+		}
+		System.out.println("Load of Sources finished. Model size: " + model.size()+ "; Time: " + TimeUnit.NANOSECONDS.toMillis(System.nanoTime()-start) + "ms");
+	}
+
+	private List<HashMap<String, HashMap<String, Integer>>> handleLocalQueries(List<NamedEntity> entities, QueryProperties props) {
+		List<HashMap<String,HashMap<String, Integer>>> result = new ArrayList<HashMap<String,HashMap<String, Integer>>>();
+		
+		//Construct context model 
+		Model cmodel = constructModel(entities);
+		
+		//query each entity separately on local model				
+		for (NamedEntity e : entities) {
+			//construct dictionary for entity type specific properties 
+			Hashtable<String, String> propDic = prepareProperties(props.get(e.getType()));
+			
+			//Construct local query
+			String lq = constructLocalQuery(e, propDic);		
+		
+			//Execute Query
+			result.add(executeLocalQuery(lq,propDic,cmodel));	
+		}
+		return result;
 		
 	}
 	
@@ -210,6 +257,7 @@ public class JenaEngine implements QueryEngine {
 			queryString += " ?" + entry.getValue();
 		}	
 		// 3) Where Clause	
+		// 3a) static part
 		queryString += " WHERE {"
 				+ "?e rdf:type " + type + ". "
 				+ "?e rdfs:label ?l."
@@ -248,7 +296,7 @@ public class JenaEngine implements QueryEngine {
 
 
 	// ------- Handle local query execution
-	private HashMap<String,HashMap<String, Integer>> executeLocalQuery(String query, Hashtable<String, String> propDic){
+	private HashMap<String,HashMap<String, Integer>> executeLocalQuery(String query, Hashtable<String, String> propDic, Model m){
 		//Result structure (PropertyKey,(Value,Count))
 		HashMap<String,HashMap<String, Integer>> result = new HashMap<String,HashMap<String, Integer>>();
 		
@@ -258,8 +306,6 @@ public class JenaEngine implements QueryEngine {
 		enhDic.put("label", "label");
 		enhDic.put("uri", "e");
 		
-		//Construct model
-		Model cmodel = constructModel();		
 		
 		//Parse Query
 		//System.out.println(query);
@@ -267,29 +313,44 @@ public class JenaEngine implements QueryEngine {
 		//System.out.println(q);
 		
 		//Execute Query
-		QueryExecution qe = QueryExecutionFactory.create(q, cmodel);
+		Long start = System.nanoTime();
+		QueryExecution qe = QueryExecutionFactory.create(q, m);
 		ResultSet RS = qe.execSelect();
+		
 		
 		//Parse Result of Query
 		while (RS.hasNext()) {
 			QuerySolution tuple = RS.next();
 			handleQueryTuple(tuple, enhDic, result);
 		}
-		System.out.println("Result rows (local): " + RS.getRowNumber());
+		System.out.println("Queried local model in " + TimeUnit.NANOSECONDS.toMillis(System.nanoTime()-start) + "ms, size: " + RS.getRowNumber());
 		qe.close();
 		
 		return result;	
 	}
 	
 	
-	// ------- Construct model: load own Ontology + queried model(s) -> Inference
-	private Model constructModel() {		
+	// ------- Construct model: load own Ontology + queried model(s) and do some Inference
+	private Model constructModel(List<NamedEntity> entities) {	
+		//get the basic model, enhance with ontology, do inference
+		//Reasoner takes to much time! -> OWLMicro is to small, according to https://jena.apache.org/documentation/inference
+		//TODO: find alternative Reasoner which can deal with equality axioms
+		//Test: does the reasoning is applied automatically if model is enhanced? 
+		Long start = System.nanoTime();
+		if(modelChanged){
+			//it is much more efficient to reason on basic statement than do reasoning on a previously inferred model
+			infModel = ModelFactory.createInfModel( ReasonerRegistry.getOWLReasoner(), ModelFactory.createUnion(model, ontoModel));
+			modelChanged = false;
+		}		
+
+		System.out.println("Infered Model size: " + model.size() + "; Time: " + TimeUnit.NANOSECONDS.toMillis(System.nanoTime()-start) + "ms");
 		
-		//Combine model(s)
-		//ontoModel.add(model); -> done in constructor
+		//TODO: try to identify correct entities in context!
+		// get relevant subspace of potential entities
 		
-		//Apply Inference on combination
-		InfModel infModel = ModelFactory.createInfModel( ReasonerRegistry.getOWLReasoner(), model);
+		// count (indirect) relations between entities
+		
+		// choose most relevant entities 
 		
 		return infModel;
 	}
@@ -345,7 +406,7 @@ public class JenaEngine implements QueryEngine {
 		this.qp.put(EntityType.PERSON, props);
 		*/
 		
-		Model m = constructModel();
+		Model m = ontoModel;
 		List<String> props;
 		for (EntityType et : EntityType.values()) {
 			props = new ArrayList<String>();
@@ -393,7 +454,11 @@ public class JenaEngine implements QueryEngine {
 		String text = "This is a test to identify SAP in Walldorf with Hasso Plattner as founder.";
 		runtest(text,je.getAvailableProperties());
 		
-		// 2nd TEST (Cache and remove property)
+		// 2nd TEST (just hit the cache)
+		text = "Just testing how caching works Hasso Plattner from Walldorf.";
+		runtest(text,je.getAvailableProperties());
+		
+		// 3rd TEST (Cache and remove property)
 		text = "This is a test to identify if Walldorf is in cache but Heidelberg has to be queried";
 		
 		QueryProperties qp = je.getAvailableProperties();				

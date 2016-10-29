@@ -167,7 +167,7 @@ public class CoreNLPEngine implements NEREngine {
 	 */
 	public static void main(String[] args) {
 		NEREngine e = CoreNLPEngine.getInstance();
-		String text = "This is a test to identify SAP in Walldorf with Hasso Plattner as founder.";
+		String text = "This is a test to identify SAP in Walldorf with H. Plattner as founder.";
 	
 		for (NamedEntity entity : e.getEntitiesFromText(text)) {
 	        System.out.println(entity.getType() + ": " + entity.getName());
