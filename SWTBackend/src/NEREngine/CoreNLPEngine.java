@@ -106,8 +106,7 @@ public class CoreNLPEngine implements NEREngine {
               if (currNeToken.equals(prevNeToken)) {
                 sb.append(" " + word);
               } else {
-                // We're done with the current entity - print it out and reset
-                // TODO save this token into an appropriate ADT to return for useful processing..
+                // We're done with the current entity 
                 handleEntity(prevNeToken, sb, tokens);
                 newToken = true;
               }
@@ -134,9 +133,12 @@ public class CoreNLPEngine implements NEREngine {
 			et = null;
 			break;
 		}
-	    	
-	  
-	    inTokens.add(new NamedEntity(inSb.toString(), et));
+	    
+	    
+	    NamedEntity ne = new NamedEntity(inSb.toString(), et);
+	    if(!inTokens.contains(ne)){
+	    	inTokens.add(ne);
+	    }
 	    inSb.setLength(0);
 	  }
         
@@ -167,7 +169,7 @@ public class CoreNLPEngine implements NEREngine {
 	 */
 	public static void main(String[] args) {
 		NEREngine e = CoreNLPEngine.getInstance();
-		String text = "This is a test to identify SAP in Walldorf with H. Plattner as founder.";
+		String text = "This is a test to identify SAP in Walldorf with H. Plattner as founder. What happens with a duplicate of H. Plattner?";
 	
 		for (NamedEntity entity : e.getEntitiesFromText(text)) {
 	        System.out.println(entity.getType() + ": " + entity.getName());

@@ -542,20 +542,25 @@ public class JenaEngine implements QueryEngine {
 		JenaEngine je = new JenaEngine();
 		
 		// 1st simple test with all entity types
-		String text = "This is a test to identify SAP in Walldorf with Hasso Plattner as founder.";
+		String text = "This is a test to identify SAP in Walldorf with H. Plattner as founder.";
 		runtest(text,je.getAvailableProperties());
 		
 		// 2nd TEST (just hit the cache)
-		text = "Just testing how caching works Hasso Plattner from Walldorf.";
+		text = "Just testing how caching works for H. Plattner from Walldorf.";
 		runtest(text,je.getAvailableProperties());
 		
 		// 3rd TEST (Cache and remove property)
 		text = "This is a test to identify if Walldorf is in cache but Heidelberg has to be queried";
-		
 		QueryProperties qp = je.getAvailableProperties();				
 		qp.get(EntityType.LOCATION).remove("depiction");
-		
 		runtest(text,qp);
+		
+		// 4th TEST: Heikos example
+		//some trouble with special characters
+		/*text = "Zu den verdaechtigen gehört Walter K., ein ehemaliger Fußballprofi aus Stuttgart. "
+				+ "K. spielte zweitweise sogar in der deutschen Nationalmannschaft, nach seiner Karrier "
+				+ "betrieb er für die Allianz ein Versicherungsbüro.";
+		runtest(text,je.getAvailableProperties());*/
 
 		/*
 		// ----- Simple test without NER

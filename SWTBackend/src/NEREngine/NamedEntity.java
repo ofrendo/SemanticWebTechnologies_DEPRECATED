@@ -19,6 +19,19 @@ public class NamedEntity {
 	    this.type = type;
 	  }
 	  
+	  @Override
+	  public boolean equals(Object o){
+		  if(o != null && o.getClass() == NamedEntity.class){
+			  NamedEntity ne = (NamedEntity)o;
+			  if(ne.getName().equals(name) && ne.getType() == type){
+				  return true;  
+			  }
+		  }
+			  
+		return false;
+		  
+	  }
+	  
 	  public enum EntityType {
 		    PERSON, ORGANIZATION, LOCATION 
 		}

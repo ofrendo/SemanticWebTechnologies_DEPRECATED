@@ -46,9 +46,15 @@ public class QueryDBPedia {
 		// 3) Where Clause	
 		queryString += " WHERE { "
 				+ "?e <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> " + type + ". "
-				+ "?e <http://www.w3.org/2000/01/rdf-schema#label> ?l.";
+				+ "?e <http://www.w3.org/2000/01/rdf-schema#label> ?l."
+			//	+ "?e <http://dbpedia.org/ontology/abstract> ?a."
+			//	+ "?e <http://www.w3.org/2000/01/rdf-schema#comment> ?c."
+				;
 		// 3c) Filter		
-		queryString += " FILTER( LANGMATCHES(LANG(?l), 'en') && ( " + filter + " ) ) }"; 
+		queryString += " FILTER( LANGMATCHES(LANG(?l), 'en')"
+			//	+ " && LANGMATCHES(LANG(?a), 'en')"
+			//	+ " && LANGMATCHES(LANG(?c), 'en')"
+				+ " && ( " + filter + " ) ) }"; 
 	
 		//System.out.println(queryString);
 		
