@@ -1,6 +1,7 @@
 package QueryEngine;
 
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 import org.apache.jena.query.Query;
 import org.apache.jena.query.QueryExecution;
@@ -12,36 +13,52 @@ import org.apache.jena.rdf.model.Model;
 import NEREngine.NamedEntity;
 import NEREngine.NamedEntity.EntityType;
 
-@Deprecated
-public class QueryDBPedia {
+public class QuerySource {
+	public enum Source {
+	    DBPedia
+	}
+
 	private Model model;
+	private String type;
+	private String endpoint;
+	private Source source;
 
 	public Model getModel(){
 		return model;
 	}
 
-	public QueryDBPedia(EntityType et, List<NamedEntity> entities) {
-		querySource(et, entities);
+	public QuerySource(Source s, EntityType et, List<NamedEntity> entities){ 
+		this.source = s;
+		determineSourceParameters(s,et);
+		querySource(entities);
 	}
 	
-	private void querySource(EntityType et,List<NamedEntity> entities) {
-		// ---- Definitions ---
-		String endpoint = "http://dbpedia.org/sparql";
-		String queryString = "";
-		String type = "";
+	private void determineSourceParameters(Source s, EntityType et) {
+		// rdf:type and enpoint definition
+		switch (s){
+		case DBPedia:
+			endpoint = "http://dbpedia.org/sparql";
+			switch (et) {
+			case ORGANIZATION:
+				type = "<http://dbpedia.org/ontology/Organisation>";
+				break;
+			case PERSON:
+				type = "<http://dbpedia.org/ontology/Person>";
+				break;
+			case LOCATION:
+				type = "<http://dbpedia.org/ontology/Location>";
+				break;
+			}
+			break;
+		}
+	}
 
-		// rdf:type 
-		switch (et) {
-		case ORGANIZATION:
-			type = "<http://dbpedia.org/ontology/Organisation>";
-			break;
-		case PERSON:
-			type = "<http://dbpedia.org/ontology/Person>";
-			break;
-		case LOCATION:
-			type = "<http://dbpedia.org/ontology/Location>";
-			break;
-		}		
+	private void querySource(List<NamedEntity> entities) {
+		Long start = System.nanoTime();
+		
+		// ---- Definitions ---
+		String queryString = "";
+			
 
 		// 2) DESCRIBE Clause
 		queryString += "DESCRIBE ?e";
@@ -74,7 +91,7 @@ public class QueryDBPedia {
 		try {
 			q = QueryFactory.create(queryString);
 		} catch (QueryParseException e) {
-			System.out.println("Query generation for DBPedia for  "+ et + ": " + entities + " failed, query string:");
+			System.out.println(source + " query generation failed for: " + entities + " - query string:");
 			System.out.println(queryString);
 			return;
 		}
@@ -83,9 +100,9 @@ public class QueryDBPedia {
 		
 		try {
 			model = qe.execDescribe();
-			System.out.println("Queried DBPedia for "+ et + ": " + entities + ", size: " + model.size());
+			System.out.println("Queried "+ source +" for: " + entities + ", size: " + model.size() + "; time: " + TimeUnit.NANOSECONDS.toMillis(System.nanoTime()-start) + "ms");
 		} catch (Exception e2) {
-			System.out.println("Query for DBPedia failed: " + e2.getMessage());
+			System.out.println("Query for "+ source +" failed: " + e2.getMessage());
 			System.out.println(q);
 		} finally {
 			qe.close() ;

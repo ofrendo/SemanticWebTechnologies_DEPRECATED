@@ -8,7 +8,7 @@ import NEREngine.NamedEntity;
 import NEREngine.NamedEntity.EntityType;
 
 public class BackgroundSourceQueryHandler extends Thread {
-	private Source s;
+	private QuerySource.Source s;
 	private EntityType et;
 	private List<NamedEntity> entities;
 	private Model m;
@@ -16,7 +16,7 @@ public class BackgroundSourceQueryHandler extends Thread {
 //	private String filter;
 
 
-	public BackgroundSourceQueryHandler(ThreadGroup group, Source s, EntityType et ,List<NamedEntity> entities){//, List<String> cacheRef, String filter) {
+	public BackgroundSourceQueryHandler(ThreadGroup group, QuerySource.Source s, EntityType et ,List<NamedEntity> entities){
 		super(group,(et + "_" + entities));
 		this.s = s;
 		this.et = et;
@@ -26,13 +26,14 @@ public class BackgroundSourceQueryHandler extends Thread {
 
 	
 	public void run(){
-		switch (s) {
-		case DBPedia:
-			m = new QueryDBPedia(et, entities).getModel();//, filter).getModel(); 
-			break;
-		default:
-			break;
-		}
+//		switch (s) {
+//		case DBPedia:
+//			m = new QueryDBPedia(et, entities).getModel();
+//			break;
+//		default:
+//			break;
+//		}
+		m = new QuerySource(s, et, entities).getModel();
 		
 	}
 	
@@ -48,12 +49,8 @@ public class BackgroundSourceQueryHandler extends Thread {
 		return entities;
 	}
 	
-	public Source getSource(){
+	public QuerySource.Source getSource(){
 		return s;
-	}
-	
-	public enum Source {
-	    DBPedia
 	}
 
 }

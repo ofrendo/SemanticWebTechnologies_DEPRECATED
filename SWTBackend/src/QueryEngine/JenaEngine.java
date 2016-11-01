@@ -26,7 +26,6 @@ import org.apache.jena.util.FileManager;
 import NEREngine.CoreNLPEngine;
 import NEREngine.NamedEntity;
 import NEREngine.NamedEntity.EntityType;
-import QueryEngine.BackgroundSourceQueryHandler.Source;
 
 
 /** 
@@ -155,7 +154,7 @@ public class JenaEngine implements QueryEngine {
 			if(!queryEntities.get(et).isEmpty()){
 	
 				//DBPedia
-				new BackgroundSourceQueryHandler(group, Source.DBPedia, et, queryEntities.get(et)).start();
+				new BackgroundSourceQueryHandler(group, QuerySource.Source.DBPedia, et, queryEntities.get(et)).start();
 			}
 		}
 		
@@ -417,7 +416,7 @@ public class JenaEngine implements QueryEngine {
 
 	// ------- Parse Tuple of local query result: TODO refine output structure  
 	private void handleQueryTuple(QuerySolution tuple,
-			Hashtable<String, String> propDic, HashMap<String,HashMap<String, Integer>> result) {
+		Hashtable<String, String> propDic, HashMap<String,HashMap<String, Integer>> result) {
 		String v = "";
 		String k = "";
 		HashMap<String, Integer> tempMap = new HashMap<String, Integer>();
