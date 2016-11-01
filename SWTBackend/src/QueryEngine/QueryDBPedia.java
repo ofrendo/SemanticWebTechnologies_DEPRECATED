@@ -9,6 +9,7 @@ import org.apache.jena.query.QueryFactory;
 import org.apache.jena.query.QueryParseException;
 import org.apache.jena.rdf.model.Model;
 
+import NEREngine.NamedEntity;
 import NEREngine.NamedEntity.EntityType;
 
 public class QueryDBPedia {
@@ -18,11 +19,11 @@ public class QueryDBPedia {
 		return model;
 	}
 
-	public QueryDBPedia(EntityType et, List<String> entities, String filter) {
-		querySource(et, entities, filter);
+	public QueryDBPedia(EntityType et, List<NamedEntity> entities){//, String filter) {
+		querySource(et, entities);
 	}
 	
-	private void querySource(EntityType et,List<String> entities, String filter) {
+	private void querySource(EntityType et,List<NamedEntity> entities) {
 		// ---- Definitions ---
 		String endpoint = "http://dbpedia.org/sparql";
 		String queryString = "";
@@ -54,7 +55,16 @@ public class QueryDBPedia {
 		queryString += " FILTER( LANGMATCHES(LANG(?l), 'en')"
 			//	+ " && LANGMATCHES(LANG(?a), 'en')"
 			//	+ " && LANGMATCHES(LANG(?c), 'en')"
-				+ " && ( " + filter + " ) ) }"; 
+				;
+		// 3d) dynamic filter part
+		String filter = "";
+		for (NamedEntity e : entities) {
+			if(filter != ""){
+				filter = " || ";
+			}
+			filter += "regex(?l,'" + e.getRegexName() + "')";
+		}				
+		queryString += " && ( " + filter + " ) ) }"; 
 	
 		//System.out.println(queryString);
 		

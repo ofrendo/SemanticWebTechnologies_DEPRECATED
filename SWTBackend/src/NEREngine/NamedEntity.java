@@ -32,6 +32,22 @@ public class NamedEntity {
 		  
 	  }
 	  
+	  @Override
+	  public String toString(){
+		return type + " " + name;
+		  
+	  }
+	  
+	  
+	  public String getRegexName(){
+		  return ("(^.{0,5}\\\\s+|^)" + name.replace(".", ".*") + "((\\\\s+.{0,5}$)|$)");
+	  }
+	  
+//	  public String getCacheRef(){
+//		  return type + "_" + name;
+//	  }
+	  
+	  
 	  public enum EntityType {
 		    PERSON, ORGANIZATION, LOCATION 
 		}
