@@ -155,6 +155,8 @@ public class JenaEngine implements QueryEngine {
 	
 				//DBPedia
 				new BackgroundSourceQueryHandler(group, QuerySource.Source.DBPedia, et, queryEntities.get(et)).start();
+				//LinkedMDB
+				//new BackgroundSourceQueryHandler(group, QuerySource.Source.LinkedMDB, et, queryEntities.get(et)).start();
 			}
 		}
 		
@@ -246,11 +248,11 @@ public class JenaEngine implements QueryEngine {
 				+ res + " rdfs:label ?l."
 			;
 		// 3b) dynamic part
-		queryString += " OPTIONAL { ";
+		//queryString += " OPTIONAL { ";
 		for (Entry<String,String> entry: props.entrySet()) {
-			queryString += " " + res + " " + PREFIX + entry.getKey() + " ?" + entry.getValue() + ".";
+			queryString += " OPTIONAL { " + res + " " + PREFIX + entry.getKey() + " ?" + entry.getValue() + ". }";
 		}
-		queryString += " }";
+		//queryString += " }";
 		// 3c) Filter
 		queryString += " FILTER(LANG(?l) = '' || LANGMATCHES(LANG(?l), 'en'))";
 		
@@ -537,23 +539,24 @@ public class JenaEngine implements QueryEngine {
 		text = "The suspect Walter K. is a former soccer player from Stuttgart. "
 				+ "After his carrer he had a insurance office for Allianz.";
 		runtest(text,je.getAvailableProperties());
-		/*
+		*/
 
-		/*
+		
 		// ----- Simple test without NER
-		List<NamedEntity> list = new ArrayList<NamedEntity>();
-		list.add(new NamedEntity("SAP", EntityType.ORGANIZATION));
-		list.add(new NamedEntity("Walldorf", EntityType.LOCATION));
-		
-		
-		JenaEngine je = new JenaEngine();
-		QueryProperties qp = je.getAvailableProperties();				
-		qp.get(EntityType.LOCATION).remove("depiction");
-		
-		System.out.println(je.getAvailableProperties());
-		System.out.println(qp);
-		System.out.println(je.queryEntityProperties(list,qp));
-		*/		
+//		List<NamedEntity> list = new ArrayList<NamedEntity>();
+//		list.add(new NamedEntity("SAP", EntityType.ORGANIZATION));
+//		list.add(new NamedEntity("Walldorf", EntityType.LOCATION));
+//		
+//		
+//		JenaEngine je = new JenaEngine();
+//		QueryProperties qp = je.getAvailableProperties();				
+//		qp.get(EntityType.LOCATION).remove("depiction");
+//		//qp.get(EntityType.ORGANIZATION).remove("distributerOf");
+//
+//		System.out.println(je.getAvailableProperties());
+//		System.out.println(qp);
+//		System.out.println(je.queryEntityProperties(list,qp));
+				
 		
 		/*
 		// ----- Test property derivation

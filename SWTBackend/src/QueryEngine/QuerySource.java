@@ -15,7 +15,7 @@ import NEREngine.NamedEntity.EntityType;
 
 public class QuerySource {
 	public enum Source {
-	    DBPedia
+	    DBPedia, LinkedMDB
 	}
 
 	private Model model;
@@ -47,6 +47,20 @@ public class QuerySource {
 				break;
 			case LOCATION:
 				type = "<http://dbpedia.org/ontology/Location>";
+				break;
+			}
+			break;
+		case LinkedMDB:
+			endpoint = "http://linkedmdb.org/sparql";
+			switch (et) {
+			case ORGANIZATION:
+				type = "<http://data.linkedmdb.org/resource/movie/film_distributor>";
+				break;
+			case PERSON:
+				type = "<http://xmlns.com/foaf/0.1/Person>";
+				break;
+			case LOCATION:
+				type = "<http://data.linkedmdb.org/resource/movie/film_location>";
 				break;
 			}
 			break;
@@ -93,11 +107,12 @@ public class QuerySource {
 		} catch (QueryParseException e) {
 			System.out.println(source + " query generation failed for: " + entities + " - query string:");
 			System.out.println(queryString);
+			System.out.println(e.getMessage());
 			return;
 		}
+		//System.out.println(q);
 		
 		QueryExecution qe = QueryExecutionFactory.sparqlService(endpoint, q);
-		
 		try {
 			model = qe.execDescribe();
 			System.out.println("Queried "+ source +" for: " + entities + ", size: " + model.size() + "; time: " + TimeUnit.NANOSECONDS.toMillis(System.nanoTime()-start) + "ms");

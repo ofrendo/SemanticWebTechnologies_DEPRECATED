@@ -57,7 +57,21 @@
 		<owl:equivalentProperty rdf:resource="http://dbpedia.org/ontology/foundedBy"/>
     </owl:ObjectProperty>
     
+	<!--  makerOf -->
+    <owl:ObjectProperty rdf:about="http://webprotege.stanford.edu/makerOf">
+        <rdfs:label>makerOf</rdfs:label>
+        <rdfs:subPropertyOf rdf:resource="http://www.w3.org/2002/07/owl#topObjectProperty"/>
+		<rdfs:domain rdf:resource="http://webprotege.stanford.edu/Person"/>
+		<owl:equivalentProperty rdf:resource="http://xmlns.com/foaf/0.1/made"/>
+    </owl:ObjectProperty>
 	
+	<!--  distributerOf -->
+    <owl:ObjectProperty rdf:about="http://webprotege.stanford.edu/distributerOf">
+        <rdfs:label>distributerOf</rdfs:label>
+        <rdfs:subPropertyOf rdf:resource="http://www.w3.org/2002/07/owl#topObjectProperty"/>
+		<rdfs:domain rdf:resource="http://webprotege.stanford.edu/Organisation"/>
+		<owl:inverseProperty rdf:resource="http://data.linkedmdb.org/resource/movie/film_distributor"/>
+    </owl:ObjectProperty>
 	
 	
 	
@@ -77,6 +91,7 @@
         <owl:equivalentClass rdf:resource="http://dbpedia.org/ontology/Organisation"/>
 		<owl:equivalentClass rdf:resource="http://xmlns.com/foaf/0.1/Organization"/>
 		<owl:equivalentClass rdf:resource="http://schema.org/Organization"/>
+		<owl:equivalentClass rdf:resource="http://data.linkedmdb.org/resource/movie/film_distributor"/>
         <rdfs:subClassOf rdf:resource="http://www.w3.org/2002/07/owl#Thing"/>
     </owl:Class>
 	
@@ -93,7 +108,8 @@
     <owl:Class rdf:about="http://webprotege.stanford.edu/Location">
         <rdfs:label>Location</rdfs:label>
         <owl:equivalentClass rdf:resource="http://dbpedia.org/ontology/Location"/>	
-		<owl:equivalentClass rdf:resource="http://schema.org/Place"/>		
+		<owl:equivalentClass rdf:resource="http://schema.org/Place"/>
+		<owl:equivalentClass rdf:resource="http://data.linkedmdb.org/resource/movie/film_location"/>		
         <rdfs:subClassOf rdf:resource="http://www.w3.org/2002/07/owl#Thing"/>
     </owl:Class>
 	
