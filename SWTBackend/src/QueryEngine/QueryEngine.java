@@ -1,6 +1,5 @@
 package QueryEngine;
 
-import java.util.HashMap;
 import java.util.List;
 import java.util.Properties;
 
@@ -12,7 +11,8 @@ public interface QueryEngine {
 	public Properties getAvailableProperties();
 	public List<String> getAvailableProperties(EntityType type);
 	
+	
 	//TODO Define return type
-	public List<HashMap<String,HashMap<String, Integer>>> queryEntities(List<NamedEntity> entities);
-	public List<HashMap<String,HashMap<String, Integer>>> queryEntities(List<NamedEntity> entities, QueryProperties props);
+	public List<NamedEntity> queryEntities(List<NamedEntity> entities);
+	public List<NamedEntity> queryEntities(List<NamedEntity> entities, QueryProperties props);
 }

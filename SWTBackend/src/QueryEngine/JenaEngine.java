@@ -32,14 +32,18 @@ import NEREngine.NamedEntity.EntityType;
  * @author Sascha Ulbrich
  *
  */
-public class JenaEngine implements QueryEngine {
-	private QueryProperties qp;
+public class JenaEngine implements QueryEngine {	
 	private static Model model;
 	private static InfModel infModel;
 	private static OntModel ontoModel;
 	private static List<NamedEntity> inCache;
 	private static final String PREFIX = ":";
 	private static Boolean modelChanged = false;
+	private static QueryProperties availableProperties;
+	
+	private List<NamedEntity> entities;
+	private QueryProperties qp;
+	
 	
 	
 	//######################### Public methods: Interface ##########################################
@@ -57,7 +61,9 @@ public class JenaEngine implements QueryEngine {
 			System.out.println("Loaded model of size: " + model.size());
 			modelChanged = true;
 		}
-		initAvailableProperties();		
+		if(availableProperties == null){
+			availableProperties = readAvailableProperties();
+		}		
 	}	
 	
 
@@ -82,7 +88,7 @@ public class JenaEngine implements QueryEngine {
 	public List<String> getAvailableProperties(EntityType type) {
 		//same issue as above -> deep copy to avoid return by reference
 		List<String> ext_list = new ArrayList<String>();
-		ext_list.addAll(qp.get(type));
+		ext_list.addAll(availableProperties.get(type));
 		return ext_list;
 	}
 
@@ -91,8 +97,8 @@ public class JenaEngine implements QueryEngine {
 	 * Query properties with full set of available properties
 	 */
 	@Override
-	public List<HashMap<String,HashMap<String, Integer>>> queryEntities(List<NamedEntity> entities) {
-		return queryEntities(entities, qp);
+	public List<NamedEntity> queryEntities(List<NamedEntity> entities) {
+		return queryEntities(entities, availableProperties);
 	}
 
 	/* (non-Javadoc)
@@ -100,17 +106,23 @@ public class JenaEngine implements QueryEngine {
 	 * Query properties with custom set of properties
 	 */
 	@Override
-	public List<HashMap<String,HashMap<String, Integer>>> queryEntities(List<NamedEntity> entities,
+	public List<NamedEntity> queryEntities(List<NamedEntity> entities,
 			QueryProperties props) {
 		if(props == null){
-			props = qp;
+			props = availableProperties;
 		}
 		
+		this.entities = entities;
+		this.qp = props;
+		
 		//Query Sources to build model
-		handleParallelSourceQueries(entities);
+		handleParallelSourceQueries();
 		
 		//Query local model		
-		return handleLocalQueries(entities, props);
+		handleLocalQueries();
+		
+		//TODO copy?
+		return entities;
 	}
 	
 	
@@ -131,7 +143,7 @@ public class JenaEngine implements QueryEngine {
 		return m;
 	}
 
-	private void handleParallelSourceQueries(List<NamedEntity> entities) {
+	private void handleParallelSourceQueries() {
 		//Initialize HashMaps
 		HashMap<EntityType, List<NamedEntity>> queryEntities = new HashMap<EntityType, List<NamedEntity>> ();
 		for (EntityType et : EntityType.values()) {
@@ -187,8 +199,8 @@ public class JenaEngine implements QueryEngine {
 		System.out.println("Load of Sources finished. Model size: " + model.size()+ "; Time: " + TimeUnit.NANOSECONDS.toMillis(System.nanoTime()-start) + "ms");
 	}
 
-	private List<HashMap<String, HashMap<String, Integer>>> handleLocalQueries(List<NamedEntity> entities, QueryProperties props) {
-		List<HashMap<String,HashMap<String, Integer>>> result = new ArrayList<HashMap<String,HashMap<String, Integer>>>();
+	private void handleLocalQueries() {
+		//List<HashMap<String,HashMap<String, Integer>>> result = new ArrayList<HashMap<String,HashMap<String, Integer>>>();
 		
 		//Construct context model 
 		Model cmodel = constructModel();
@@ -203,15 +215,16 @@ public class JenaEngine implements QueryEngine {
 		//query each entity separately on local model				
 		for (NamedEntity e : entities) {
 			//construct dictionary for entity type specific properties 
-			Hashtable<String, String> propDic = prepareProperties(props.get(e.getType()));
+			Hashtable<String, String> propDic = prepareProperties(qp.get(e.getType()));
 			
 			//Construct local query
 			String lq = constructLocalQuery(propDic, relevantURIs.get(e.getName()));		
 		
 			//Execute Query
-			result.add(executeLocalQuery(lq,propDic,cmodel, e));	
+			//result.add(executeLocalQuery(lq,propDic,cmodel, e));
+			executeLocalQuery(lq,propDic,cmodel, e);	
 		}
-		return result;
+		//return result;
 		
 	}
 	
@@ -285,9 +298,9 @@ public class JenaEngine implements QueryEngine {
 
 
 	// ------- Handle local query execution
-	private HashMap<String,HashMap<String, Integer>> executeLocalQuery(String query, Hashtable<String, String> propDic, Model m, NamedEntity ne){
+	private void executeLocalQuery(String query, Hashtable<String, String> propDic, Model m, NamedEntity ne){
 		//Result structure (PropertyKey,(Value,Count))
-		HashMap<String,HashMap<String, Integer>> result = new HashMap<String,HashMap<String, Integer>>();
+		//HashMap<String,HashMap<String, Integer>> result = new HashMap<String,HashMap<String, Integer>>();
 		
 		//label is always present and has special logic -> enhance property dictionary just for reading them 
 		Hashtable<String, String> enhDic = new Hashtable<String, String> ();
@@ -308,13 +321,13 @@ public class JenaEngine implements QueryEngine {
 		//Parse Result of Query
 		while (RS.hasNext()) {
 			QuerySolution tuple = RS.next();
-			handleQueryTuple(tuple, enhDic, result);
+			//handleQueryTuple(tuple, enhDic, result);
 			handleQueryTuple(tuple, enhDic, ne);
 		}
 		System.out.println("Queried local model in " + TimeUnit.NANOSECONDS.toMillis(System.nanoTime()-start) + "ms, size: " + RS.getRowNumber());
 		qe.close();
 		
-		return result;	
+		//return result;	
 	}
 	
 	
@@ -421,38 +434,38 @@ public class JenaEngine implements QueryEngine {
 	}
 
 
-	// ------- Parse Tuple of local query result: TODO refine output structure  
-	private void handleQueryTuple(QuerySolution tuple,
-		Hashtable<String, String> propDic, HashMap<String,HashMap<String, Integer>> result) {
-		String v = "";
-		String k = "";
-		HashMap<String, Integer> tempMap = new HashMap<String, Integer>();
-		
-		//handle dynamic properties
-		for (Entry<String,String> entry: propDic.entrySet()) {
-			tempMap = new HashMap<String, Integer>();
-			v = new String();
-			k = new String(); 
-			k = entry.getKey();
-			if(tuple.contains(entry.getValue())){
-				v = tuple.get(entry.getValue()).toString();
-				if(!result.containsKey(k)){
-					//key new -> add key, value with count 1
-					tempMap.put(v, 1);
-					result.put(k, tempMap);
-				}
-				else if(!result.get(k).containsKey(v)){
-					//key existing, but new value -> add new value with count 1
-					result.get(k).put(v, 1);					
-				}else{
-					//key and value existing -> increment counter					
-					result.get(k).replace(v, result.get(k).get(v)+1);
-				}
-				
-			}
-		}
-		
-	}
+//	// ------- Parse Tuple of local query result: TODO refine output structure  
+//	private void handleQueryTuple(QuerySolution tuple,
+//		Hashtable<String, String> propDic, HashMap<String,HashMap<String, Integer>> result) {
+//		String v = "";
+//		String k = "";
+//		HashMap<String, Integer> tempMap = new HashMap<String, Integer>();
+//		
+//		//handle dynamic properties
+//		for (Entry<String,String> entry: propDic.entrySet()) {
+//			tempMap = new HashMap<String, Integer>();
+//			v = new String();
+//			k = new String(); 
+//			k = entry.getKey();
+//			if(tuple.contains(entry.getValue())){
+//				v = tuple.get(entry.getValue()).toString();
+//				if(!result.containsKey(k)){
+//					//key new -> add key, value with count 1
+//					tempMap.put(v, 1);
+//					result.put(k, tempMap);
+//				}
+//				else if(!result.get(k).containsKey(v)){
+//					//key existing, but new value -> add new value with count 1
+//					result.get(k).put(v, 1);					
+//				}else{
+//					//key and value existing -> increment counter					
+//					result.get(k).replace(v, result.get(k).get(v)+1);
+//				}
+//				
+//			}
+//		}
+//		
+//	}
 	
 	// ------- Parse Tuple of local query result: based on Entity  
 		private void handleQueryTuple(QuerySolution tuple,
@@ -489,9 +502,9 @@ public class JenaEngine implements QueryEngine {
 		}
 
 
-	// ------- init available Properties via local Ontology
-	private void initAvailableProperties(){
-		this.qp = new QueryProperties();
+	// ------- read available Properties via local Ontology
+	private QueryProperties readAvailableProperties(){
+		QueryProperties queryprops = new QueryProperties();
 		
 		/*
 		//Test:
@@ -536,8 +549,9 @@ public class JenaEngine implements QueryEngine {
 				props.add(s);
 			}			
 			qe.close();
-			this.qp.put(et, props);
+			queryprops.put(et, props);
 		}
+		return queryprops;
 	}
 	
 	
@@ -553,11 +567,11 @@ public class JenaEngine implements QueryEngine {
 		
 		// 1st simple test with all entity types
 		String text = "This is a test to identify SAP in Walldorf with H. Plattner as founder.";
-			runtest(text,je.getAvailableProperties());
+			runtest(text,null);
 		
 		// 2nd TEST (just hit the cache)
 		text = "Just testing how caching works for H. Plattner from Walldorf.";
-		runtest(text,je.getAvailableProperties());
+		runtest(text,null);
 		
 		// 3rd TEST (Cache and remove property)
 		text = "This is a test to identify if Walldorf is in cache but Heidelberg has to be queried";
@@ -616,11 +630,8 @@ public class JenaEngine implements QueryEngine {
 		// 2) Retrieve LOD information
 		System.out.println("Result LOD:");
 		JenaEngine je = new JenaEngine();
-		for (HashMap<String,HashMap<String, Integer>> e : je.queryEntities(list, qp)){
-			for (String key : e.keySet()) {
-				System.out.println(key + ": " + e.get(key));
-			}
-			
+		for (NamedEntity e : je.queryEntities(list, qp)){
+			System.out.println(e);			
 		}		
 	}
 }

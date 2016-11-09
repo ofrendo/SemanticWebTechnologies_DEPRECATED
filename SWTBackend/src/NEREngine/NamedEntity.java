@@ -20,6 +20,7 @@ public class NamedEntity {
 	    super();
 	    this.name = name;
 	    this.type = type;
+	    this.properties = new HashMap<String,HashMap<String, Integer>>();
 	  }
 	  
 	  @Override
@@ -37,7 +38,7 @@ public class NamedEntity {
 	  
 	  @Override
 	  public String toString(){
-		return type + " " + name;
+		return type + " '" + name + "' properties: " + properties;
 		  
 	  }
 	  
