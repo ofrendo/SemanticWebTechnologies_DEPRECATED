@@ -25,6 +25,14 @@ public class NamedEntity {
 	    this.uri = "";
 	  }
 	  
+	  public NamedEntity(NamedEntity template){
+		  super();
+		  this.name = template.getName();
+		  this.type = template.getType();
+		  this.properties = new HashMap<String,HashMap<String, Integer>>();
+		  this.addProperties(template.getProperties());
+		  this.uri = template.getURI();
+	  }  
 	  @Override
 	  public boolean equals(Object o){
 		  if(o != null && o.getClass() == NamedEntity.class){
@@ -50,6 +58,7 @@ public class NamedEntity {
 		  return ("(^.{0,10}\\\\s+|^)" + name.replace(".", ".*") + "((\\\\s+.{0,5}(\\\\(.*\\\\))?$)|$)");
 	  }
 	  
+	  //add property values via copy
 	  public void addProperties(HashMap<String,HashMap<String, Integer>> p){
 		  for (String p_key : p.keySet()) {
 			  for (String v_key : p.get(p_key).keySet()) {
@@ -80,8 +89,8 @@ public class NamedEntity {
 		 return this.uri;
 	  }
 	  
-	  public HashMap<String,HashMap<String, Integer>> getProperties(){
-		  //TODO copy
+	  public HashMap<String,HashMap<String, Integer>> getProperties(){		  
+		  //TODO copy necessary?
 		  return properties;
 	  }
 	  

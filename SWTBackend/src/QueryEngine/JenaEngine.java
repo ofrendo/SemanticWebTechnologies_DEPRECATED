@@ -41,6 +41,7 @@ public class JenaEngine implements QueryEngine {
 	private static Boolean modelChanged = false;
 	private static QueryProperties availableProperties;
 	
+	private Model localModel;
 	private List<NamedEntity> entities;
 	private QueryProperties qp;
 	
@@ -97,8 +98,8 @@ public class JenaEngine implements QueryEngine {
 	 * Query properties with full set of available properties
 	 */
 	@Override
-	public List<NamedEntity> queryEntities(List<NamedEntity> entities) {
-		return queryEntities(entities, availableProperties);
+	public void queryEntities(List<NamedEntity> entities) {
+		queryEntities(entities, availableProperties);
 	}
 
 	/* (non-Javadoc)
@@ -106,29 +107,47 @@ public class JenaEngine implements QueryEngine {
 	 * Query properties with custom set of properties
 	 */
 	@Override
-	public List<NamedEntity> queryEntities(List<NamedEntity> entities,
+	public void queryEntities(List<NamedEntity> entities,
 			QueryProperties props) {
 		if(props == null){
 			props = availableProperties;
 		}
 		
-		
-		this.entities = entities;
+		//add copies of entities to ensure that list cannot be change from outside
+		this.entities = copyList(entities);
+				
 		this.qp = props;
+		this.localModel = ModelFactory.createDefaultModel();
 		
 		//Query Sources to build model
 		handleParallelSourceQueries();
 		
 		//Query local model		
-		handleLocalQueries();
+		handleLocalQueries();		
 		
-		//TODO copy?
-		return entities;
 	}
 	
+	@Override
+	public List<NamedEntity> getResultEntities(){
+		return copyList(this.entities);
+	}
 	
+	@Override
+	public List<String[]> getContextTriples(){		
+		return queryContextTriples(infModel);
+	}	
 	
+
+
 	//######################### Private methods doing actual work ##########################################
+	private List<NamedEntity> copyList(List<NamedEntity> entities){
+		List<NamedEntity> copy = new ArrayList<NamedEntity>();
+		for (NamedEntity ne : entities) {
+			copy.add(new NamedEntity(ne));
+		}
+		return copy;		
+	}
+	
 
 	private OntModel loadLocalOntology() {
 		OntModel m = ModelFactory.createOntologyModel(OntModelSpec.OWL_MEM);
@@ -201,17 +220,15 @@ public class JenaEngine implements QueryEngine {
 	}
 
 	private void handleLocalQueries() {
-		//List<HashMap<String,HashMap<String, Integer>>> result = new ArrayList<HashMap<String,HashMap<String, Integer>>>();
-		
-		//Construct context model 
-		Model cmodel = constructModel();
-		
-		//Try to identify correct entities in context!
+
+		//Construct inference model (Ontology + loaded triples) 
+		//Try to identify correct entities and context!
 		//-> count (indirect) relations between entities and choose most relevant entities
-		//HashMap<String,String>  relevantURIs = deriveRelevantURIs(entities, cmodel);
 		//System.out.println("Relevant URIs in Context: " + relevantURIs);
-		deriveRelevantURIs(cmodel);
+		checkInfModel();
+		deriveRelevantURIs(infModel);
 		
+		localModel = constructContextModel();		
 		
 				
 		//query each entity separately on local model				
@@ -224,10 +241,9 @@ public class JenaEngine implements QueryEngine {
 		
 			//Execute Query
 			//result.add(executeLocalQuery(lq,propDic,cmodel, e));
-			executeLocalQuery(lq,propDic,cmodel, e);	
+			executeLocalQuery(lq,propDic,localModel, e);	
 		}
-		//return result;
-		
+	
 	}
 	
 	// ------- Prepare properties -> assign indices for variable to technical property names
@@ -301,8 +317,6 @@ public class JenaEngine implements QueryEngine {
 
 	// ------- Handle local query execution
 	private void executeLocalQuery(String query, Hashtable<String, String> propDic, Model m, NamedEntity ne){
-		//Result structure (PropertyKey,(Value,Count))
-		//HashMap<String,HashMap<String, Integer>> result = new HashMap<String,HashMap<String, Integer>>();
 		
 		//label is always present and has special logic -> enhance property dictionary just for reading them 
 		Hashtable<String, String> enhDic = new Hashtable<String, String> ();
@@ -323,18 +337,15 @@ public class JenaEngine implements QueryEngine {
 		//Parse Result of Query
 		while (RS.hasNext()) {
 			QuerySolution tuple = RS.next();
-			//handleQueryTuple(tuple, enhDic, result);
 			handleQueryTuple(tuple, enhDic, ne);
 		}
 		System.out.println("Queried local model in " + TimeUnit.NANOSECONDS.toMillis(System.nanoTime()-start) + "ms, size: " + RS.getRowNumber());
 		qe.close();
-		
-		//return result;	
 	}
 	
 	
 	// ------- Construct model: load own Ontology + queried model(s) and do some Inference
-	private Model constructModel() {	
+	private void checkInfModel() {	
 		//get the basic model, enhance with ontology, do inference
 		//Reasoner takes to much time, but OWLMicro seems to work but could be to simple ... https://jena.apache.org/documentation/inference
 		Long start = System.nanoTime();
@@ -344,15 +355,31 @@ public class JenaEngine implements QueryEngine {
 			modelChanged = false;
 		}		
 
-		System.out.println("Infered Model size: " + model.size() + "; Time: " + TimeUnit.NANOSECONDS.toMillis(System.nanoTime()-start) + "ms");
-				
-		//TODO: Derive relevant subspace model based on identified URIs? -> Describe of URIs? 
+		System.out.println("Infered Model size: " + model.size() + "; Time: " + TimeUnit.NANOSECONDS.toMillis(System.nanoTime()-start) + "ms");				
 
-		return infModel;
+	}
+	
+	private Model constructContextModel(){
+		//Derive relevant subspace model based on identified URIs -> Describe of URIs
+		String filter = "";
+
+		for (NamedEntity ne : entities) {
+			if(filter != ""){
+				filter += " || ";
+			}
+			filter += "?s = <" + ne.getURI() + ">";
+		}
+		
+		String queryString = "DESCRIBE ?s WHERE { "
+				+ " ?s ?p ?o"
+				+ " FILTER ("  + filter + " ) } ";
+		
+		Query q = QueryFactory.create(queryString);
+		QueryExecution qe = QueryExecutionFactory.create(q, infModel);
+		return ModelFactory.createInfModel(ReasonerRegistry.getOWLMicroReasoner(), qe.execDescribe());		
 	}
 	
 	private void deriveRelevantURIs(Model m) {
-		//HashMap<String,String> nameToResource = new HashMap<String, String>();
 		
 		for (NamedEntity e : entities) {	
 			
@@ -428,75 +455,26 @@ public class JenaEngine implements QueryEngine {
 					value = sol.get("e1").toString();
 				}
 			}
-			//nameToResource.put(e.getName(), value);
 			e.setURI(value);
 			qe.close();
 		}
-		//return nameToResource;
 	}
 
 
-//	// ------- Parse Tuple of local query result: TODO refine output structure  
-//	private void handleQueryTuple(QuerySolution tuple,
-//		Hashtable<String, String> propDic, HashMap<String,HashMap<String, Integer>> result) {
-//		String v = "";
-//		String k = "";
-//		HashMap<String, Integer> tempMap = new HashMap<String, Integer>();
-//		
-//		//handle dynamic properties
-//		for (Entry<String,String> entry: propDic.entrySet()) {
-//			tempMap = new HashMap<String, Integer>();
-//			v = new String();
-//			k = new String(); 
-//			k = entry.getKey();
-//			if(tuple.contains(entry.getValue())){
-//				v = tuple.get(entry.getValue()).toString();
-//				if(!result.containsKey(k)){
-//					//key new -> add key, value with count 1
-//					tempMap.put(v, 1);
-//					result.put(k, tempMap);
-//				}
-//				else if(!result.get(k).containsKey(v)){
-//					//key existing, but new value -> add new value with count 1
-//					result.get(k).put(v, 1);					
-//				}else{
-//					//key and value existing -> increment counter					
-//					result.get(k).replace(v, result.get(k).get(v)+1);
-//				}
-//				
-//			}
-//		}
-//		
-//	}
-	
 	// ------- Parse Tuple of local query result: based on Entity  
 		private void handleQueryTuple(QuerySolution tuple,
 			Hashtable<String, String> propDic, NamedEntity ne) {
 			String v = "";
 			String k = "";
-			//HashMap<String, Integer> tempMap = new HashMap<String, Integer>();
 			
 			//handle dynamic properties
 			for (Entry<String,String> entry: propDic.entrySet()) {
-				//tempMap = new HashMap<String, Integer>();
 				v = new String();
 				k = new String(); 
 				k = entry.getKey();
 				if(tuple.contains(entry.getValue())){
 					v = tuple.get(entry.getValue()).toString();
 					ne.addPropertyValue(k, v, 1);
-//					if(!result.containsKey(k)){
-//						//key new -> add key, value with count 1
-//						tempMap.put(v, 1);
-//						result.put(k, tempMap);
-//					}
-//					else if(!result.get(k).containsKey(v)){
-//						//key existing, but new value -> add new value with count 1
-//						result.get(k).put(v, 1);					
-//					}else{
-//						//key and value existing -> increment counter					
-//						result.get(k).replace(v, result.get(k).get(v)+1);
-//					}
 					
 				}
 			}
@@ -556,6 +534,118 @@ public class JenaEngine implements QueryEngine {
 		return queryprops;
 	}
 	
+	private List<String[]> queryContextTriples(Model m) {
+		List<String[]> result = new ArrayList<String[]>();
+//		System.out.println(m);
+		
+//		SELECT DISTINCT ?l_e1 ?l_p ?l_e2 WHERE {
+//			?e1 ?p ?e2.
+//			?e1 rdfs:label ?le1.
+//			?e2 rdfs:label ?le2.
+//			?p rdfs:label ?lp.
+//			FILTER ( 
+//			(?e1 = <http://dbpedia.org/resource/Walldorf> || ?e1 =  <http://dbpedia.org/resource/SAP_SE>) && 
+//			(?e2 = <http://dbpedia.org/resource/Walldorf> || ?e2 = <http://dbpedia.org/resource/SAP_SE>) &&
+//			LANGMATCHES(LANG(?le1), 'en') && LANGMATCHES(LANG(?le2), 'en') && LANGMATCHES(LANG(?lp), 'en') 
+//			)
+//			BIND (STR(?le1) as ?l_e1)
+//			BIND (STR(?le2) as ?l_e2)
+//			BIND (STR(?lp) as ?l_p)
+//			}
+		
+//		SELECT DISTINCT ?l_e1 ?l_p ?l_e2 WHERE {
+//			?e1 ?p ?e2.
+//			?o ?p2 ?e2.
+//			?e1 rdfs:label ?le1.
+//			?e2 rdfs:label ?le2.
+//			?p rdfs:label ?lp.
+//			FILTER ( 
+//			(?e1 = <http://dbpedia.org/resource/Walldorf> || ?e1 =  <http://dbpedia.org/resource/SAP_SE>) && ?e1 != ?o &&
+//			(?o = <http://dbpedia.org/resource/Walldorf> || ?o = <http://dbpedia.org/resource/SAP_SE>) &&
+//			LANGMATCHES(LANG(?le1), 'en') && LANGMATCHES(LANG(?le2), 'en') && LANGMATCHES(LANG(?lp), 'en') 
+//			)
+//			BIND (STR(?le1) as ?l_e1)
+//			BIND (STR(?le2) as ?l_e2)
+//			BIND (STR(?lp) as ?l_p)
+//			}
+		
+		//Add filter for URI 
+		String filter_e1 = "";
+		String filter_e2 = "";
+		String filter_o = ""; // "o"ther entity for indirect relation
+		for (NamedEntity e : entities) {			
+			if(filter_e1 != ""){
+				filter_e1 += " || "; 
+				filter_e2 += " || "; 
+				filter_o += " || ";
+			}
+			filter_e1 += " ( ?e1 = <" + e.getURI() + "> )";
+			filter_e2 += " ( ?e2 = <" + e.getURI() + "> )";
+			filter_o += " ( ?o = <" + e.getURI() + "> )";
+		}
+		
+		String filterLang = " && LANGMATCHES(LANG(?le1), 'en') && LANGMATCHES(LANG(?le2), 'en') && LANGMATCHES(LANG(?lp), 'en')"; 
+		
+		String filter1 = " ( " + filter_e1 + " ) && ( " + filter_e2 + " ) "	+ filterLang;		
+		String filter2 = " ( " + filter_e1 + " ) && ( " + filter_o + " ) && ?e1 != ?o " + filterLang;
+		
+		String bind = " BIND (STR(?le1) as ?l_e1) BIND (STR(?le2) as ?l_e2) BIND (STR(?lp) as ?l_p)";
+		
+		
+		// Union part 1: direct relations
+		String part1 = "SELECT DISTINCT ?l_e1 ?l_p ?l_e2  WHERE {"
+				+ " ?e1 ?p ?e2."
+				+ " ?e1 rdfs:label ?le1."
+				+ " ?e2 rdfs:label ?le2."
+				+ " OPTIONAL {?p rdfs:label ?lp.}"
+				+ " FILTER ( " + filter1 + " ) "
+				+ bind
+				+ "}";
+		
+		// Union part 2: indirect relations
+		String part2 = "SELECT DISTINCT ?l_e1 ?l_p ?l_e2  WHERE {"
+				+ " ?e1 ?p ?e2."
+				+ " ?o ?p2 ?e2."
+				+ " ?e1 rdfs:label ?le1."
+				+ " ?e2 rdfs:label ?le2."
+				+ " OPTIONAL { ?p rdfs:label ?lp.}"
+				+ " FILTER ( " + filter2 + " ) "
+				+ bind
+				+ "}";
+		
+		// Complete Query
+		String queryString = "PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>"
+				+ " PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>"
+				+ " PREFIX " + PREFIX + " <http://webprotege.stanford.edu/>"
+				+ " SELECT DISTINCT ?l_e1 ?l_p ?l_e2 { { "
+				+ part1
+				+ " } UNION { " 
+				+ part2
+				+ " } } "
+				; 
+		//System.out.println(queryString);
+		Query query = QueryFactory.create(queryString); 
+		//System.out.println(query);
+		QueryExecution qe = QueryExecutionFactory.create(query, m); 
+		ResultSet results = qe.execSelect(); 
+
+		String[] triple;
+		while(results.hasNext()) {  
+			QuerySolution sol = results.next(); 
+			//System.out.println(sol);
+			if( sol.contains("l_e1") && sol.contains("l_e2") && sol.contains("l_p")){
+				triple = new String[3];
+				triple[0] = sol.get("l_e1").toString();				
+				triple[1] = sol.get("l_p").toString();
+				triple[2] = sol.get("l_e2").toString();				
+				result.add(triple);
+			}
+		}
+		qe.close();
+		
+		return result;
+	}
+	
 	
 	// #################################### TEST SECTION #################################################
 	
@@ -605,13 +695,18 @@ public class JenaEngine implements QueryEngine {
 //		
 //		JenaEngine je = new JenaEngine();
 //		QueryProperties qp = je.getAvailableProperties();				
-//		qp.get(EntityType.LOCATION).remove("depiction");
+////		qp.get(EntityType.LOCATION).remove("depiction");
 //		//qp.get(EntityType.ORGANIZATION).remove("distributerOf");
-//
+//		
 //		System.out.println(je.getAvailableProperties());
 //		System.out.println(qp);
-//		System.out.println(je.queryEntityProperties(list,qp));
-				
+//		
+//		je.queryEntities(list,qp);
+//		System.out.println(je.getResultEntities());
+//		for (String[] a : je.getContextTriples()) {
+//			System.out.println(a[0] + " - " + a[1] + " - " + a[2]);
+//		}
+//				
 		
 		/*
 		// ----- Test property derivation
@@ -627,13 +722,18 @@ public class JenaEngine implements QueryEngine {
 		for (NamedEntity entity : list) {
 	        System.out.println(entity.getType() + ": " + entity.getName());
 		}
-		
-		
+				
 		// 2) Retrieve LOD information
 		System.out.println("Result LOD:");
 		JenaEngine je = new JenaEngine();
-		for (NamedEntity e : je.queryEntities(list, qp)){
+		je.queryEntities(list, qp);
+		for (NamedEntity e : je.getResultEntities()){
 			System.out.println(e);			
-		}		
+		}
+		
+		System.out.println("Triples of context:");
+		for (String[] a : je.getContextTriples()) {
+			System.out.println(a[0] + " - " + a[1] + " - " + a[2]);
+		}
 	}
 }
