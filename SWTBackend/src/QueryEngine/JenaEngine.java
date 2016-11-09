@@ -112,6 +112,7 @@ public class JenaEngine implements QueryEngine {
 			props = availableProperties;
 		}
 		
+		
 		this.entities = entities;
 		this.qp = props;
 		
@@ -207,8 +208,9 @@ public class JenaEngine implements QueryEngine {
 		
 		//Try to identify correct entities in context!
 		//-> count (indirect) relations between entities and choose most relevant entities
-		HashMap<String,String>  relevantURIs = deriveRelevantURIs(entities, cmodel);
-		System.out.println("Relevant URIs in Context: " + relevantURIs);	
+		//HashMap<String,String>  relevantURIs = deriveRelevantURIs(entities, cmodel);
+		//System.out.println("Relevant URIs in Context: " + relevantURIs);
+		deriveRelevantURIs(cmodel);
 		
 		
 				
@@ -218,7 +220,7 @@ public class JenaEngine implements QueryEngine {
 			Hashtable<String, String> propDic = prepareProperties(qp.get(e.getType()));
 			
 			//Construct local query
-			String lq = constructLocalQuery(propDic, relevantURIs.get(e.getName()));		
+			String lq = constructLocalQuery(propDic, e.getURI());		
 		
 			//Execute Query
 			//result.add(executeLocalQuery(lq,propDic,cmodel, e));
@@ -349,9 +351,8 @@ public class JenaEngine implements QueryEngine {
 		return infModel;
 	}
 	
-	private HashMap<String,String> deriveRelevantURIs(List<NamedEntity> entities,
-			Model m) {
-		HashMap<String,String> nameToResource = new HashMap<String, String>();
+	private void deriveRelevantURIs(Model m) {
+		//HashMap<String,String> nameToResource = new HashMap<String, String>();
 		
 		for (NamedEntity e : entities) {	
 			
@@ -427,10 +428,11 @@ public class JenaEngine implements QueryEngine {
 					value = sol.get("e1").toString();
 				}
 			}
-			nameToResource.put(e.getName(), value);
+			//nameToResource.put(e.getName(), value);
+			e.setURI(value);
 			qe.close();
 		}
-		return nameToResource;
+		//return nameToResource;
 	}
 
 

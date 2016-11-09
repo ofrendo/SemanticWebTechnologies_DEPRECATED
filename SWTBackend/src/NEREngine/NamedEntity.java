@@ -7,6 +7,7 @@ public class NamedEntity {
 	  private String name;
 	  private EntityType type;
 	  private HashMap<String,HashMap<String, Integer>> properties;
+	  private String uri;
 
 	  public String getName() {
 	    return name;
@@ -21,6 +22,7 @@ public class NamedEntity {
 	    this.name = name;
 	    this.type = type;
 	    this.properties = new HashMap<String,HashMap<String, Integer>>();
+	    this.uri = "";
 	  }
 	  
 	  @Override
@@ -38,7 +40,7 @@ public class NamedEntity {
 	  
 	  @Override
 	  public String toString(){
-		return type + " '" + name + "' properties: " + properties;
+		return type + " '" + name + "' URI: " + uri + "\n Properties: " + properties;
 		  
 	  }
 	  
@@ -68,6 +70,14 @@ public class NamedEntity {
 			  //Add new value to property
 			  properties.get(p_key).put(v_key, count);
 		  }
+	  }
+	  
+	  public void setURI(String uri){
+		  this.uri = uri;
+	  }
+	  
+	  public String getURI(){
+		 return this.uri;
 	  }
 	  
 	  public HashMap<String,HashMap<String, Integer>> getProperties(){
