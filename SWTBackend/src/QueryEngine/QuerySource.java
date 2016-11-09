@@ -99,7 +99,7 @@ public class QuerySource {
 		String filter = "";
 		for (NamedEntity e : entities) {
 			if(filter != ""){
-				filter = " || ";
+				filter += " || ";
 			}
 			filter += "regex(?l,'" + e.getRegexName() + "')";
 		}				
@@ -133,13 +133,15 @@ public class QuerySource {
 		//---------------- Query labels for subjects, predicates and objects ------------------
 		List<String> subjects = new ArrayList<String>();
 		ResultSet results = QueryExecutionFactory.create("SELECT DISTINCT ?uri WHERE { "
-				+ " OPTIONAL {?uri ?p ?o }"
-				+ " OPTIONAL {?s ?p ?uri }"
+				+ " "
+				+ " { ?s ?p ?uri } UNION "
+				+ " {?uri ?p1 ?o }"
 				+ " FILTER (isURI(?uri)) "
 				+ "}", model).execSelect();
 		while(results.hasNext()) {  
 			QuerySolution sol = results.next();
-			subjects.add(sol.get("uri").toString());
+			subjects.add(sol.getResource("uri").getURI());
+//			System.out.println(sol.get("uri").toString());
 		}
 		
 		results = QueryExecutionFactory.create("SELECT DISTINCT ?pred WHERE { ?s ?pred ?o }", model).execSelect();
@@ -189,7 +191,7 @@ public class QuerySource {
 			
 		}
 		System.out.println("Queried labels from "+ source +", model size: " + model.size() + "; count: " + subjects.size());
-		//System.out.println(model);
+//		System.out.println(model);
 //		results = QueryExecutionFactory.create("PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#> "
 //				+ " SELECT DISTINCT ?l WHERE { ?s rdfs:label ?l }", model).execSelect();
 //		while(results.hasNext()) {

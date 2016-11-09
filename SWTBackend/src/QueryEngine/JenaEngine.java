@@ -605,7 +605,8 @@ public class JenaEngine implements QueryEngine {
 		// Union part 2: indirect relations
 		String part2 = "SELECT DISTINCT ?l_e1 ?l_p ?l_e2  WHERE {"
 				+ " ?e1 ?p ?e2."
-				+ " ?o ?p2 ?e2."
+				+ " OPTIONAL { ?o ?p2 ?e2 }"
+				+ " OPTIONAL { ?e2 ?p3 ?o }"
 				+ " ?e1 rdfs:label ?le1."
 				+ " ?e2 rdfs:label ?le2."
 				+ " OPTIONAL { ?p rdfs:label ?lp.}"
@@ -656,9 +657,10 @@ public class JenaEngine implements QueryEngine {
 		
 		//  ---- End-to-End Test
 		JenaEngine je = new JenaEngine();
+		String text = "";
 		
 		// 1st simple test with all entity types
-		String text = "This is a test to identify SAP in Walldorf with H. Plattner as founder.";
+		text = "This is a test to identify SAP in Walldorf with H. Plattner as founder.";
 			runtest(text,null);
 		
 		// 2nd TEST (just hit the cache)
