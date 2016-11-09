@@ -13,6 +13,6 @@ public interface QueryEngine {
 	public List<String> getAvailableProperties(EntityType type);
 	
 	//TODO Define return type
-	public List<HashMap<String,HashMap<String, Integer>>> queryEntityProperties(List<NamedEntity> entities);
-	public List<HashMap<String,HashMap<String, Integer>>> queryEntityProperties(List<NamedEntity> entities, QueryProperties props);
+	public List<HashMap<String,HashMap<String, Integer>>> queryEntities(List<NamedEntity> entities);
+	public List<HashMap<String,HashMap<String, Integer>>> queryEntities(List<NamedEntity> entities, QueryProperties props);
 }

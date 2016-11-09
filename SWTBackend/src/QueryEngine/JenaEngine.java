@@ -41,6 +41,7 @@ public class JenaEngine implements QueryEngine {
 	private static final String PREFIX = ":";
 	private static Boolean modelChanged = false;
 	
+	
 	//######################### Public methods: Interface ##########################################
 	
 	public JenaEngine() {		
@@ -90,8 +91,8 @@ public class JenaEngine implements QueryEngine {
 	 * Query properties with full set of available properties
 	 */
 	@Override
-	public List<HashMap<String,HashMap<String, Integer>>> queryEntityProperties(List<NamedEntity> entities) {
-		return queryEntityProperties(entities, qp);
+	public List<HashMap<String,HashMap<String, Integer>>> queryEntities(List<NamedEntity> entities) {
+		return queryEntities(entities, qp);
 	}
 
 	/* (non-Javadoc)
@@ -99,8 +100,11 @@ public class JenaEngine implements QueryEngine {
 	 * Query properties with custom set of properties
 	 */
 	@Override
-	public List<HashMap<String,HashMap<String, Integer>>> queryEntityProperties(List<NamedEntity> entities,
-			QueryProperties props) {		
+	public List<HashMap<String,HashMap<String, Integer>>> queryEntities(List<NamedEntity> entities,
+			QueryProperties props) {
+		if(props == null){
+			props = qp;
+		}
 		
 		//Query Sources to build model
 		handleParallelSourceQueries(entities);
@@ -205,7 +209,7 @@ public class JenaEngine implements QueryEngine {
 			String lq = constructLocalQuery(propDic, relevantURIs.get(e.getName()));		
 		
 			//Execute Query
-			result.add(executeLocalQuery(lq,propDic,cmodel));	
+			result.add(executeLocalQuery(lq,propDic,cmodel, e));	
 		}
 		return result;
 		
@@ -281,7 +285,7 @@ public class JenaEngine implements QueryEngine {
 
 
 	// ------- Handle local query execution
-	private HashMap<String,HashMap<String, Integer>> executeLocalQuery(String query, Hashtable<String, String> propDic, Model m){
+	private HashMap<String,HashMap<String, Integer>> executeLocalQuery(String query, Hashtable<String, String> propDic, Model m, NamedEntity ne){
 		//Result structure (PropertyKey,(Value,Count))
 		HashMap<String,HashMap<String, Integer>> result = new HashMap<String,HashMap<String, Integer>>();
 		
@@ -305,6 +309,7 @@ public class JenaEngine implements QueryEngine {
 		while (RS.hasNext()) {
 			QuerySolution tuple = RS.next();
 			handleQueryTuple(tuple, enhDic, result);
+			handleQueryTuple(tuple, enhDic, ne);
 		}
 		System.out.println("Queried local model in " + TimeUnit.NANOSECONDS.toMillis(System.nanoTime()-start) + "ms, size: " + RS.getRowNumber());
 		qe.close();
@@ -448,6 +453,40 @@ public class JenaEngine implements QueryEngine {
 		}
 		
 	}
+	
+	// ------- Parse Tuple of local query result: based on Entity  
+		private void handleQueryTuple(QuerySolution tuple,
+			Hashtable<String, String> propDic, NamedEntity ne) {
+			String v = "";
+			String k = "";
+			//HashMap<String, Integer> tempMap = new HashMap<String, Integer>();
+			
+			//handle dynamic properties
+			for (Entry<String,String> entry: propDic.entrySet()) {
+				//tempMap = new HashMap<String, Integer>();
+				v = new String();
+				k = new String(); 
+				k = entry.getKey();
+				if(tuple.contains(entry.getValue())){
+					v = tuple.get(entry.getValue()).toString();
+					ne.addPropertyValue(k, v, 1);
+//					if(!result.containsKey(k)){
+//						//key new -> add key, value with count 1
+//						tempMap.put(v, 1);
+//						result.put(k, tempMap);
+//					}
+//					else if(!result.get(k).containsKey(v)){
+//						//key existing, but new value -> add new value with count 1
+//						result.get(k).put(v, 1);					
+//					}else{
+//						//key and value existing -> increment counter					
+//						result.get(k).replace(v, result.get(k).get(v)+1);
+//					}
+					
+				}
+			}
+			
+		}
 
 
 	// ------- init available Properties via local Ontology
@@ -577,7 +616,7 @@ public class JenaEngine implements QueryEngine {
 		// 2) Retrieve LOD information
 		System.out.println("Result LOD:");
 		JenaEngine je = new JenaEngine();
-		for (HashMap<String,HashMap<String, Integer>> e : je.queryEntityProperties(list, qp)){
+		for (HashMap<String,HashMap<String, Integer>> e : je.queryEntities(list, qp)){
 			for (String key : e.keySet()) {
 				System.out.println(key + ": " + e.get(key));
 			}
